@@ -1,4 +1,4 @@
-# OmicsPilot: Cellular Metabolic Profiler
+# OmicsPilot: Cellular Metabolic Profiler (cellMetPro)
 
 **Visualize and explore cellular metabolic states from scRNA-seq data**
 
@@ -37,10 +37,7 @@ Help researchers **visually explore the metabolic landscape** of their cells to 
 ## 🧪 Biological Applications
 
 ### Supported Cell Types
-- Immune cells (T cells, neutrophils, macrophages)
-- Cancer cells and tumor microenvironment
-- Stem cells and differentiation studies
-- Any cell type with scRNA-seq data
+Any cell type with scRNA-seq data with available GEM for the relative organism
 
 ### Research Questions This Tool Helps Answer
 - Which metabolic pathways are upregulated in disease vs. healthy cells?
@@ -55,8 +52,7 @@ Help researchers **visually explore the metabolic landscape** of their cells to 
 | Input Type | Format | Description |
 |------------|--------|-------------|
 | Gene Expression | `.csv`, `.tsv`, `.h5ad` | TPM-normalized counts matrix |
-| Cell Metadata | `.csv`, `.tsv` | Cell annotations, cluster labels, conditions |
-| Cluster Annotations | `.csv` | Mapping of cluster IDs to biological names |
+| Cell Metadata | `.csv`, `.tsv` | Cell annotations, cluster labels, conditions
 
 ### Supported Organisms
 - Human (Homo sapiens)
@@ -68,7 +64,7 @@ Help researchers **visually explore the metabolic landscape** of their cells to 
 ## 🛠️ Planned Architecture
 
 ```
-omicpilot/
+cellmetpro/
 ├── core/
 │   ├── compass.py          # COMPASS algorithm implementation
 │   ├── fba.py              # Flux Balance Analysis utilities
@@ -122,25 +118,25 @@ omicpilot/
 
 ```
 # Core
-numpy
-pandas
-scipy
-scanpy
-anndata
+- numpy
+- pandas
+- scipy
+- scanpy
+- anndata
 
 # Visualization
-matplotlib
-seaborn
-plotly
-streamlit
+- matplotlib
+- seaborn
+- plotly
+- streamlit
 
 # Analysis
-scikit-learn
-statsmodels
-umap-learn
+- scikit-learn
+- statsmodels
+- umap-learn
 
 # Metabolic modeling
-cobrapy
+- cobrapy
 ```
 
 ---

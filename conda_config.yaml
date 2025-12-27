@@ -1,0 +1,46 @@
+name: cellMetPro
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  # Python version
+  - python>=3.10
+
+  # Core scientific computing
+  - numpy
+  - pandas
+  - scipy
+
+  # Single-cell analysis
+  - scanpy
+  - anndata
+
+  # Visualization
+  - matplotlib
+  - seaborn
+  - plotly
+
+  # Machine learning & statistics
+  - scikit-learn
+  - statsmodels
+  - umap-learn
+
+  # Metabolic modeling
+  - cobra  # cobrapy
+
+  # Web application
+  - streamlit
+
+  # Development tools
+  - jupyter
+  - ipykernel
+  - pytest
+  - black
+  - ruff
+
+  # Pip-only packages
+  - pip
+  - pip:
+    # Add pip-only packages here as needed
+    # - package-name

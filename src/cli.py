@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.version:
-        from cellmetpro import __version__
+        from src import __version__
         print(f"cellmetpro {__version__}")
         return 0
 

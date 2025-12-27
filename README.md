@@ -64,7 +64,7 @@ Any cell type with scRNA-seq data with available GEM for the relative organism
 ## 🛠️ Planned Architecture
 
 ```
-cellmetpro/
+src/
 ├── core/
 │   ├── compass.py          # COMPASS algorithm implementation
 │   ├── fba.py              # Flux Balance Analysis utilities

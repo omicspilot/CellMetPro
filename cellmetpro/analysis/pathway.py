@@ -53,7 +53,7 @@ class PathwayAnalyzer:
         """
         raise NotImplementedError
 
-    def aggregate_to_pathways(
+    def aggregate(
         self,
         method: str = "mean",
     ) -> pd.DataFrame:
@@ -71,7 +71,7 @@ class PathwayAnalyzer:
         """
         raise NotImplementedError
 
-    def pathway_enrichment(
+    def enrich(
         self,
         differential_results: pd.DataFrame,
         method: str = "gsea",

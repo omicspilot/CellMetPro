@@ -86,7 +86,7 @@ cellmetpro/
 
 ---
 
-## 🚀 Roadmap
+## Roadmap
 
 ### Phase 1: Core Infrastructure
 - [ ] Data loaders for common scRNA-seq formats (AnnData, Seurat objects)
@@ -114,7 +114,7 @@ cellmetpro/
 
 ---
 
-## 📦 Dependencies
+## Dependencies
 
 ```
 # Core
@@ -141,7 +141,7 @@ cellmetpro/
 
 ---
 
-## 🧬 Background: FBA + GEMs + scRNA-seq
+## Background: FBA + GEMs + scRNA-seq
 
 **Flux Balance Analysis (FBA)** predicts metabolic fluxes through a biochemical network by optimizing an objective function (e.g., biomass production) subject to stoichiometric constraints.
 

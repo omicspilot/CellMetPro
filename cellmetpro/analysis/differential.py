@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
+from scipy import stats
+from statsmodels.stats.multitest import multipletests
+
 
 if TYPE_CHECKING:
     import anndata as ad
@@ -60,9 +63,61 @@ class DifferentialAnalysis:
         Returns
         -------
         pd.DataFrame
-            Results with columns: reaction, log2fc, pvalue, padj.
+            Results with columns: reaction, group1_mean, group2_mean, log2fc, pvalue, padj_bh, padj_bonf.
         """
-        raise NotImplementedError
+        
+        assert method in {"wilcoxon", "ttest", "mannwhitneyu"}, "Invalid method"
+    
+        # Ensure columns in reaction_scores match index in groups
+        common_cells = self.reaction_scores.columns.intersection(self.groups.index)
+        scores = self.reaction_scores[common_cells]
+        group_labels = self.groups[common_cells]
+
+        # Filter cells by group
+        cells1 = group_labels[group_labels == group1].index
+        cells2 = group_labels[group_labels == group2].index
+
+        results = []
+        for reaction_id in scores.index:
+            # reaction scores
+            scores1 = scores.loc[reaction_id, cells1]
+            scores2 = scores.loc[reaction_id, cells2]
+            
+            # means
+            mean1 = np.mean(scores1)
+            mean2 = np.mean(scores2)
+            
+            # log2 for change
+            epsilon = 1e-9
+            log2fc = np.log2((mean2 + epsilon) / (mean1 + epsilon))
+            
+            # run statistical test
+            if method == "wilcoxon":
+                stat, pval = stats.ranksums(scores1, scores2)
+            elif method == "ttest":
+                stat, pval = stats.ttest_ind(scores1, scores2)
+            elif method == "mannwhitneyu":
+                stat, pval = stats.mannwhitneyu(scores1, scores2, alternative='two-sided')
+        
+            results.append({
+                "reaction": reaction_id,
+                "group1_mean": mean1,
+                "group2_mean": mean2,
+                "log2fc": log2fc,
+                "statistic": stat,
+                "pvalue": pval,
+            })
+            
+        # FDR correction
+        results_df = pd.DataFrame(results)
+        _, padj_bh, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")      # Less strict
+        _, padj_bonf, _, _ = multipletests(results_df["pvalue"], method="bonferroni") # More strict
+
+        results_df["padj_bh"] = padj_bh
+        results_df["padj_bonf"] = padj_bonf
+        
+        # sort results based on p-val
+        return results_df.sort_values("pvalue")
 
     def rank_reactions(
         self,

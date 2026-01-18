@@ -218,3 +218,163 @@ def test_compare_groups_detects_significant_difference(reaction_scores, group_la
     # These should be significant (p < 0.05)
     assert r1_pval < 0.05, f"R1 should be significant, got p={r1_pval}"
     assert r2_pval < 0.05, f"R2 should be significant, got p={r2_pval}"
+
+
+# =============================================================================
+# TESTS FOR rank_reactions()
+# =============================================================================
+
+
+## TEST J: rank_reactions returns correct structure
+
+def test_rank_reactions_returns_dataframe(reaction_scores, group_labels):
+    """Test that rank_reactions returns a DataFrame with expected columns."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.rank_reactions("A", n_top=5)
+
+    assert isinstance(result, pd.DataFrame)
+
+    expected_cols = ["reaction", "mean_score", "std_score", "min_score",
+                     "max_score", "n_cells", "rank"]
+    for col in expected_cols:
+        assert col in result.columns
+
+
+## TEST K: rank_reactions respects n_top parameter
+
+def test_rank_reactions_n_top(reaction_scores, group_labels):
+    """Test that rank_reactions returns at most n_top reactions."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+
+    result_3 = da.rank_reactions("A", n_top=3)
+    result_10 = da.rank_reactions("A", n_top=10)
+
+    assert len(result_3) == 3
+    # Only 5 reactions exist, so n_top=10 should return 5
+    assert len(result_10) == 5
+
+
+## TEST L: rank_reactions sorted by mean_score ascending
+
+def test_rank_reactions_sorted(reaction_scores, group_labels):
+    """Test that results are sorted by mean_score ascending (lowest = most active)."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.rank_reactions("A")
+
+    mean_scores = result["mean_score"].values
+    assert all(mean_scores[i] <= mean_scores[i + 1] for i in range(len(mean_scores) - 1))
+
+
+## TEST M: rank_reactions rank column is correct
+
+def test_rank_reactions_rank_column(reaction_scores, group_labels):
+    """Test that rank column starts at 1 and increments."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.rank_reactions("A", n_top=5)
+
+    expected_ranks = list(range(1, len(result) + 1))
+    assert list(result["rank"]) == expected_ranks
+
+
+## TEST N: rank_reactions n_cells is correct
+
+def test_rank_reactions_n_cells(reaction_scores, group_labels):
+    """Test that n_cells correctly counts cells in the group."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.rank_reactions("A")
+
+    # Group A has 5 cells (cell_0 to cell_4)
+    assert (result["n_cells"] == 5).all()
+
+
+# =============================================================================
+# TESTS FOR compute_effect_size()
+# =============================================================================
+
+
+## TEST O: compute_effect_size returns correct structure
+
+def test_compute_effect_size_returns_dataframe(reaction_scores, group_labels):
+    """Test that compute_effect_size returns a DataFrame with expected columns."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.compute_effect_size("A", "B")
+
+    assert isinstance(result, pd.DataFrame)
+
+    expected_cols = ["reaction", "cohens_d", "abs_cohens_d", "interpretation",
+                     "group1_mean", "group2_mean", "pooled_std"]
+    for col in expected_cols:
+        assert col in result.columns
+
+
+## TEST P: compute_effect_size sorted by absolute effect size
+
+def test_compute_effect_size_sorted(reaction_scores, group_labels):
+    """Test that results are sorted by abs_cohens_d descending (largest effect first)."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.compute_effect_size("A", "B")
+
+    abs_d = result["abs_cohens_d"].values
+    assert all(abs_d[i] >= abs_d[i + 1] for i in range(len(abs_d) - 1))
+
+
+## TEST Q: compute_effect_size interpretation is valid
+
+def test_compute_effect_size_interpretation(reaction_scores, group_labels):
+    """Test that interpretation values are valid categories."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.compute_effect_size("A", "B")
+
+    valid_interpretations = {"negligible", "small", "medium", "large"}
+    assert set(result["interpretation"].unique()).issubset(valid_interpretations)
+
+
+## TEST R: compute_effect_size detects large effects
+
+def test_compute_effect_size_detects_large_effects(reaction_scores, group_labels):
+    """Test that reactions with large differences have large effect sizes.
+
+    R1 and R2 were artificially made different between groups.
+    They should have large effect sizes.
+    """
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.compute_effect_size("A", "B")
+
+    r1_row = result[result["reaction"] == "R1"].iloc[0]
+    r2_row = result[result["reaction"] == "R2"].iloc[0]
+
+    # These should have large effect sizes
+    assert r1_row["interpretation"] == "large", f"R1 should have large effect, got {r1_row['interpretation']}"
+    assert r2_row["interpretation"] == "large", f"R2 should have large effect, got {r2_row['interpretation']}"
+
+
+## TEST S: compute_effect_size direction matches Cohen's d sign
+
+def test_compute_effect_size_direction(reaction_scores, group_labels):
+    """Test that Cohen's d sign reflects which group has higher values.
+
+    Cohen's d = (mean1 - mean2) / pooled_std
+    Positive d means group1 > group2
+    Negative d means group1 < group2
+    """
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.compute_effect_size("A", "B")
+
+    # R1 is higher in B, so group1(A) < group2(B), d should be negative
+    r1_row = result[result["reaction"] == "R1"].iloc[0]
+    assert r1_row["cohens_d"] < 0, "R1 should have negative Cohen's d (higher in B)"
+
+    # R2 is higher in A, so group1(A) > group2(B), d should be positive
+    r2_row = result[result["reaction"] == "R2"].iloc[0]
+    assert r2_row["cohens_d"] > 0, "R2 should have positive Cohen's d (higher in A)"
+
+
+## TEST T: compute_effect_size abs_cohens_d matches cohens_d
+
+def test_compute_effect_size_abs_matches(reaction_scores, group_labels):
+    """Test that abs_cohens_d is the absolute value of cohens_d."""
+    da = DifferentialAnalysis(reaction_scores, group_labels)
+    result = da.compute_effect_size("A", "B")
+
+    for _, row in result.iterrows():
+        np.testing.assert_almost_equal(row["abs_cohens_d"], abs(row["cohens_d"]))

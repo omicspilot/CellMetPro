@@ -11,6 +11,8 @@ import logging
 import sys
 from pathlib import Path
 
+from rich_argparse import RichHelpFormatter
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -28,22 +30,32 @@ def create_parser() -> argparse.ArgumentParser:
     argparse.ArgumentParser
         Configured argument parser.
     """
+    # Configure rich-argparse styles
+    RichHelpFormatter.styles["argparse.prog"] = "bold cyan"
+    RichHelpFormatter.styles["argparse.args"] = "green"
+    RichHelpFormatter.styles["argparse.groups"] = "bold magenta"
+    RichHelpFormatter.styles["argparse.metavar"] = "yellow"
+
     parser = argparse.ArgumentParser(
         prog="cellmetpro",
-        description="CellMetPro - Cellular Metabolic Profiler for scRNA-seq data",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""
+╔═══════════════════════════════════════════════════════════════════════╗
+║                        🧬 CellMetPro 🧬                               ║
+║         Cellular Metabolic Profiler for scRNA-seq data                ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+Analyze metabolic activity at single-cell resolution using the COMPASS
+algorithm. Score reactions, identify metabolic heterogeneity, and
+discover metabolic programs in your scRNA-seq data.
+""",
+        formatter_class=RichHelpFormatter,
         epilog="""
 Examples:
-  # Run COMPASS analysis on expression data
   cellmetpro run expression.h5ad -m human -o results/
-
-  # Run with custom model file
   cellmetpro run data.csv -m /path/to/model.xml -o output/
-
-  # Run with microclustering for large datasets
   cellmetpro run large_data.h5ad --microcluster --cells-per-cluster 100
-
-  # Launch interactive dashboard
+  cellmetpro differential scores.csv groups.csv --plot
+  cellmetpro cluster scores.csv --method leiden --embedding umap
   cellmetpro dashboard results/
 """,
     )
@@ -65,6 +77,7 @@ Examples:
         "run",
         help="Run COMPASS metabolic analysis pipeline",
         description="Run COMPASS algorithm to score metabolic reactions from scRNA-seq data",
+        formatter_class=RichHelpFormatter,
     )
     run_parser.add_argument(
         "input",
@@ -157,6 +170,7 @@ Examples:
     dash_parser = subparsers.add_parser(
         "dashboard",
         help="Launch interactive Streamlit dashboard",
+        formatter_class=RichHelpFormatter,
     )
     dash_parser.add_argument(
         "results",
@@ -174,11 +188,175 @@ Examples:
     info_parser = subparsers.add_parser(
         "info",
         help="Show information about a metabolic model",
+        formatter_class=RichHelpFormatter,
     )
     info_parser.add_argument(
         "model",
         type=str,
         help="Model name or path to model file",
+    )
+
+    # Differential analysis command
+    diff_parser = subparsers.add_parser(
+        "differential",
+        help="Run differential analysis between groups",
+        description="Compare metabolic activity between cell groups",
+        formatter_class=RichHelpFormatter,
+    )
+    diff_parser.add_argument(
+        "scores",
+        type=Path,
+        help="Reaction scores file (CSV with reactions x cells)",
+    )
+    diff_parser.add_argument(
+        "groups",
+        type=Path,
+        help="Group labels file (CSV with cell_id and group columns)",
+    )
+    diff_parser.add_argument(
+        "-o", "--output",
+        type=Path,
+        default=Path("differential_results"),
+        help="Output directory (default: differential_results/)",
+    )
+    diff_parser.add_argument(
+        "--group1",
+        type=str,
+        help="First group name (for pairwise comparison)",
+    )
+    diff_parser.add_argument(
+        "--group2",
+        type=str,
+        help="Second group name (for pairwise comparison)",
+    )
+    diff_parser.add_argument(
+        "--method",
+        choices=["wilcoxon", "ttest", "mannwhitneyu", "kruskal", "anova"],
+        default="wilcoxon",
+        help="Statistical test method (default: wilcoxon)",
+    )
+    diff_parser.add_argument(
+        "--fdr-threshold",
+        type=float,
+        default=0.05,
+        help="FDR threshold for significance (default: 0.05)",
+    )
+    diff_parser.add_argument(
+        "--log2fc-threshold",
+        type=float,
+        default=0.5,
+        help="Log2 fold change threshold (default: 0.5)",
+    )
+    diff_parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Generate volcano plot",
+    )
+
+    # Clustering command
+    cluster_parser = subparsers.add_parser(
+        "cluster",
+        help="Cluster cells based on metabolic profiles",
+        description="Perform dimensionality reduction and clustering on metabolic data",
+        formatter_class=RichHelpFormatter,
+    )
+    cluster_parser.add_argument(
+        "scores",
+        type=Path,
+        help="Reaction scores file (CSV with reactions x cells)",
+    )
+    cluster_parser.add_argument(
+        "-o", "--output",
+        type=Path,
+        default=Path("clustering_results"),
+        help="Output directory (default: clustering_results/)",
+    )
+    cluster_parser.add_argument(
+        "--n-clusters",
+        type=int,
+        help="Number of clusters (auto-detect if not specified)",
+    )
+    cluster_parser.add_argument(
+        "--method",
+        choices=["kmeans", "leiden", "louvain"],
+        default="kmeans",
+        help="Clustering method (default: kmeans)",
+    )
+    cluster_parser.add_argument(
+        "--embedding",
+        choices=["umap", "tsne", "pca"],
+        default="umap",
+        help="Embedding method for visualization (default: umap)",
+    )
+    cluster_parser.add_argument(
+        "--n-pcs",
+        type=int,
+        default=50,
+        help="Number of PCA components (default: 50)",
+    )
+    cluster_parser.add_argument(
+        "--resolution",
+        type=float,
+        default=1.0,
+        help="Resolution for Leiden/Louvain clustering (default: 1.0)",
+    )
+    cluster_parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Generate embedding plot",
+    )
+
+    # Pathway enrichment command
+    pathway_parser = subparsers.add_parser(
+        "pathway",
+        help="Run pathway enrichment analysis",
+        description="Perform GO term or subsystem enrichment analysis on significant reactions",
+        formatter_class=RichHelpFormatter,
+    )
+    pathway_parser.add_argument(
+        "reactions",
+        type=Path,
+        help="File with reaction list (one per line or CSV with 'reaction' column)",
+    )
+    pathway_parser.add_argument(
+        "-o", "--output",
+        type=Path,
+        default=Path("pathway_results"),
+        help="Output directory (default: pathway_results/)",
+    )
+    pathway_parser.add_argument(
+        "--model",
+        type=str,
+        default="human",
+        help="Metabolic model for annotation (default: human)",
+    )
+    pathway_parser.add_argument(
+        "--background",
+        type=Path,
+        help="Background reaction list (default: all model reactions)",
+    )
+    pathway_parser.add_argument(
+        "--method",
+        choices=["go", "subsystem"],
+        default="subsystem",
+        help="Enrichment type: GO terms or subsystems (default: subsystem)",
+    )
+    pathway_parser.add_argument(
+        "--namespace",
+        choices=["biological_process", "molecular_function", "cellular_component", "all"],
+        default="biological_process",
+        help="GO namespace for GO enrichment (default: biological_process)",
+    )
+    pathway_parser.add_argument(
+        "--fdr-threshold",
+        type=float,
+        default=0.05,
+        help="FDR threshold (default: 0.05)",
+    )
+    pathway_parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Generate enrichment dotplot",
     )
 
     return parser
@@ -391,6 +569,356 @@ def run_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_differential(args: argparse.Namespace) -> int:
+    """Run differential analysis between groups.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+    """
+    import pandas as pd
+
+    from cellmetpro.analysis.differential import DifferentialAnalysis
+
+    logger.info("CellMetPro Differential Analysis")
+    logger.info("=" * 50)
+
+    # Load reaction scores
+    logger.info(f"Loading reaction scores from {args.scores}")
+    scores = pd.read_csv(args.scores, index_col=0)
+    logger.info(f"Loaded {scores.shape[0]} reactions x {scores.shape[1]} cells")
+
+    # Load group labels
+    logger.info(f"Loading group labels from {args.groups}")
+    groups_df = pd.read_csv(args.groups)
+
+    # Handle different group file formats
+    if "cell_id" in groups_df.columns and "group" in groups_df.columns:
+        groups = pd.Series(groups_df["group"].values, index=groups_df["cell_id"])
+    elif groups_df.shape[1] == 2:
+        groups = pd.Series(groups_df.iloc[:, 1].values, index=groups_df.iloc[:, 0])
+    else:
+        # Assume first column is index
+        groups = pd.Series(groups_df.iloc[:, 0].values, index=groups_df.index)
+
+    # Check overlap
+    common_cells = scores.columns.intersection(groups.index)
+    logger.info(f"Found {len(common_cells)} cells in common")
+
+    if len(common_cells) == 0:
+        logger.error("No common cells between scores and groups")
+        return 1
+
+    unique_groups = groups[common_cells].unique()
+    logger.info(f"Groups: {list(unique_groups)}")
+
+    # Create output directory
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    # Create differential analysis object
+    da = DifferentialAnalysis(scores, groups)
+
+    # Determine analysis type
+    if args.group1 and args.group2:
+        # Pairwise comparison
+        logger.info(f"Running pairwise comparison: {args.group1} vs {args.group2}")
+        result = da.compare_groups(args.group1, args.group2, method=args.method)
+        output_file = args.output / f"differential_{args.group1}_vs_{args.group2}.csv"
+    elif len(unique_groups) == 2:
+        # Auto pairwise for 2 groups
+        g1, g2 = sorted(unique_groups)
+        logger.info(f"Running pairwise comparison: {g1} vs {g2}")
+        result = da.compare_groups(g1, g2, method=args.method)
+        output_file = args.output / f"differential_{g1}_vs_{g2}.csv"
+    elif args.method in ["kruskal", "anova"]:
+        # Multi-group comparison
+        logger.info(f"Running multi-group comparison ({args.method})")
+        result = da.compare_multiple_groups(method=args.method)
+        output_file = args.output / "differential_multigroup.csv"
+    else:
+        # Default to all pairwise
+        logger.info("Running all pairwise comparisons")
+        result = da.all_pairwise_comparisons(method=args.method)
+        output_file = args.output / "differential_all_pairwise.csv"
+
+    # Filter significant results
+    if "padj_bh" in result.columns:
+        n_significant = (result["padj_bh"] < args.fdr_threshold).sum()
+        logger.info(f"Significant reactions (FDR < {args.fdr_threshold}): {n_significant}")
+
+    # Save results
+    result.to_csv(output_file, index=False)
+    logger.info(f"Results saved to {output_file}")
+
+    # Generate volcano plot if requested
+    if args.plot and "log2fc" in result.columns and "padj_bh" in result.columns:
+        logger.info("Generating volcano plot...")
+        import matplotlib
+        matplotlib.use("Agg")
+        from cellmetpro.visualization import plot_volcano
+
+        ax = plot_volcano(
+            result,
+            log2fc_threshold=args.log2fc_threshold,
+            pvalue_threshold=args.fdr_threshold,
+            save=str(args.output / "volcano_plot.png"),
+        )
+        logger.info(f"Volcano plot saved to {args.output / 'volcano_plot.png'}")
+
+    logger.info("Differential analysis complete!")
+    return 0
+
+
+def run_cluster(args: argparse.Namespace) -> int:
+    """Run clustering analysis on metabolic profiles.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+    """
+    import pandas as pd
+
+    from cellmetpro.analysis.clustering import MetabolicClustering, find_optimal_clusters
+
+    logger.info("CellMetPro Clustering Analysis")
+    logger.info("=" * 50)
+
+    # Load reaction scores
+    logger.info(f"Loading reaction scores from {args.scores}")
+    scores = pd.read_csv(args.scores, index_col=0)
+    logger.info(f"Loaded {scores.shape[0]} reactions x {scores.shape[1]} cells")
+
+    # Create output directory
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    # Create clustering object
+    mc = MetabolicClustering(scores, n_clusters=args.n_clusters)
+
+    # Compute PCA
+    logger.info(f"Computing PCA with {args.n_pcs} components...")
+    pca_result = mc.compute_pca(n_components=args.n_pcs)
+    logger.info(f"PCA complete: {pca_result.shape}")
+
+    # Auto-detect optimal clusters if not specified
+    if args.n_clusters is None and args.method == "kmeans":
+        logger.info("Finding optimal number of clusters...")
+        n_clusters = find_optimal_clusters(pca_result, max_clusters=15, method="silhouette")
+        logger.info(f"Optimal clusters: {n_clusters}")
+        mc.n_clusters = n_clusters
+
+    # Compute embedding
+    logger.info(f"Computing {args.embedding.upper()} embedding...")
+    if args.embedding == "umap":
+        try:
+            embedding = mc.compute_umap()
+        except ImportError:
+            logger.warning("UMAP not available, falling back to t-SNE")
+            embedding = mc.compute_tsne()
+    elif args.embedding == "tsne":
+        embedding = mc.compute_tsne()
+    else:  # pca
+        embedding = pca_result[:, :2]
+        mc.embedding = embedding
+
+    logger.info(f"Embedding complete: {embedding.shape}")
+
+    # Run clustering
+    logger.info(f"Running {args.method} clustering...")
+    if args.method in ["leiden", "louvain"]:
+        labels = mc.cluster(method=args.method, resolution=args.resolution)
+    else:
+        labels = mc.cluster(method=args.method)
+
+    n_clusters = len(set(labels))
+    logger.info(f"Found {n_clusters} clusters")
+
+    # Export results
+    result_df = mc.to_dataframe()
+    result_df.to_csv(args.output / "clustering_results.csv", index=False)
+    logger.info(f"Results saved to {args.output / 'clustering_results.csv'}")
+
+    # Get cluster markers
+    logger.info("Computing cluster markers...")
+    markers = mc.get_cluster_markers(n_top=20)
+    markers.to_csv(args.output / "cluster_markers.csv", index=False)
+    logger.info(f"Markers saved to {args.output / 'cluster_markers.csv'}")
+
+    # Generate plot if requested
+    if args.plot:
+        logger.info("Generating embedding plot...")
+        import matplotlib
+        matplotlib.use("Agg")
+        from cellmetpro.visualization import plot_embedding
+
+        ax = plot_embedding(
+            embedding,
+            color=labels.astype(str),
+            title=f"Metabolic Clustering ({args.method})",
+            xlabel=f"{args.embedding.upper()} 1",
+            ylabel=f"{args.embedding.upper()} 2",
+            save=str(args.output / "embedding_plot.png"),
+        )
+        logger.info(f"Plot saved to {args.output / 'embedding_plot.png'}")
+
+    logger.info("Clustering analysis complete!")
+    return 0
+
+
+def run_pathway(args: argparse.Namespace) -> int:
+    """Run pathway enrichment analysis.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+    """
+    import pandas as pd
+
+    from cellmetpro.analysis.pathway import PathwayAnalyzer
+    from cellmetpro.models import load_gem, get_subsystem_reactions
+
+    logger.info("CellMetPro Pathway Enrichment Analysis")
+    logger.info("=" * 50)
+
+    # Load reaction list
+    logger.info(f"Loading reactions from {args.reactions}")
+    if args.reactions.suffix == ".csv":
+        rxn_df = pd.read_csv(args.reactions)
+        if "reaction" in rxn_df.columns:
+            reactions = list(rxn_df["reaction"])
+        else:
+            reactions = list(rxn_df.iloc[:, 0])
+    else:
+        with open(args.reactions) as f:
+            reactions = [line.strip() for line in f if line.strip()]
+
+    logger.info(f"Loaded {len(reactions)} reactions")
+
+    # Create output directory
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    # Load metabolic model
+    logger.info(f"Loading metabolic model: {args.model}")
+    model = load_gem(args.model)
+
+    # Get background reactions
+    if args.background:
+        logger.info(f"Loading background from {args.background}")
+        if args.background.suffix == ".csv":
+            bg_df = pd.read_csv(args.background)
+            if "reaction" in bg_df.columns:
+                background = list(bg_df["reaction"])
+            else:
+                background = list(bg_df.iloc[:, 0])
+        else:
+            with open(args.background) as f:
+                background = [line.strip() for line in f if line.strip()]
+    else:
+        background = [r.id for r in model.reactions]
+
+    logger.info(f"Background: {len(background)} reactions")
+
+    if args.method == "subsystem":
+        # Subsystem enrichment
+        logger.info("Running subsystem enrichment...")
+
+        # Get subsystem mapping
+        subsystem_mapping = get_subsystem_reactions(model)
+
+        # Create pathway analyzer
+        pa = PathwayAnalyzer(subsystem_mapping)
+
+        # Run enrichment
+        result = pa.enrich(
+            reactions,
+            background=background,
+        )
+
+        # Filter by FDR
+        significant = result[result["padj"] < args.fdr_threshold]
+        logger.info(f"Significant subsystems (FDR < {args.fdr_threshold}): {len(significant)}")
+
+        # Save results
+        result.to_csv(args.output / "subsystem_enrichment.csv", index=False)
+        logger.info(f"Results saved to {args.output / 'subsystem_enrichment.csv'}")
+
+    else:  # GO enrichment
+        logger.info("Running GO term enrichment...")
+        from cellmetpro.analysis.pathway import GOEnrichmentAnalyzer
+
+        # Create GO analyzer
+        go_analyzer = GOEnrichmentAnalyzer(model)
+
+        # Filter by namespace if specified
+        namespace = None if args.namespace == "all" else args.namespace
+
+        # Run enrichment
+        result = go_analyzer.enrich_reactions(
+            reactions,
+            background=background,
+            namespace=namespace,
+        )
+
+        if result is not None and len(result) > 0:
+            # Filter by FDR
+            significant = result[result["padj"] < args.fdr_threshold]
+            logger.info(f"Significant GO terms (FDR < {args.fdr_threshold}): {len(significant)}")
+
+            # Save results
+            result.to_csv(args.output / "go_enrichment.csv", index=False)
+            logger.info(f"Results saved to {args.output / 'go_enrichment.csv'}")
+        else:
+            logger.warning("No GO enrichment results found")
+            result = pd.DataFrame()
+
+    # Generate plot if requested
+    if args.plot and len(result) > 0:
+        logger.info("Generating enrichment dotplot...")
+        import matplotlib
+        matplotlib.use("Agg")
+        from cellmetpro.visualization import plot_enrichment_dotplot
+
+        # Prepare data for plotting
+        if args.method == "subsystem":
+            plot_result = result.rename(columns={
+                "pathway": "go_term",
+                "pathway": "go_name",
+            })
+            if "go_name" not in plot_result.columns:
+                plot_result["go_name"] = plot_result["pathway"]
+                plot_result["go_term"] = plot_result["pathway"]
+        else:
+            plot_result = result
+
+        ax = plot_enrichment_dotplot(
+            plot_result,
+            pvalue_threshold=args.fdr_threshold,
+            title=f"{'Subsystem' if args.method == 'subsystem' else 'GO'} Enrichment",
+            save=str(args.output / "enrichment_plot.png"),
+        )
+        logger.info(f"Plot saved to {args.output / 'enrichment_plot.png'}")
+
+    logger.info("Pathway enrichment analysis complete!")
+    return 0
+
+
 def show_model_info(args: argparse.Namespace) -> int:
     """Show information about a metabolic model.
 
@@ -475,6 +1003,12 @@ def main(argv: list[str] | None = None) -> int:
             return run_dashboard(args)
         elif args.command == "info":
             return show_model_info(args)
+        elif args.command == "differential":
+            return run_differential(args)
+        elif args.command == "cluster":
+            return run_cluster(args)
+        elif args.command == "pathway":
+            return run_pathway(args)
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
         return 130

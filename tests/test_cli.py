@@ -230,3 +230,319 @@ class TestCLIVerbose:
         result = main(["-v", "run", str(tmp_path / "nonexistent.h5ad")])
 
         assert result == 1
+
+
+class TestDifferentialCommand:
+    """Tests for differential command."""
+
+    def test_differential_parser_arguments(self):
+        """Test differential command argument parsing."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "differential", "scores.csv", "groups.csv",
+            "-o", "diff_results/",
+            "--method", "wilcoxon",
+            "--fdr-threshold", "0.01",
+        ])
+
+        assert args.command == "differential"
+        assert args.scores == Path("scores.csv")
+        assert args.groups == Path("groups.csv")
+        assert args.output == Path("diff_results/")
+        assert args.method == "wilcoxon"
+        assert args.fdr_threshold == 0.01
+
+    def test_differential_pairwise_args(self):
+        """Test differential command with pairwise groups."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "differential", "scores.csv", "groups.csv",
+            "--group1", "control",
+            "--group2", "treatment",
+            "--plot",
+        ])
+
+        assert args.group1 == "control"
+        assert args.group2 == "treatment"
+        assert args.plot is True
+
+    def test_differential_multigroup_method(self):
+        """Test differential command with multigroup methods."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        for method in ["kruskal", "anova"]:
+            args = parser.parse_args([
+                "differential", "scores.csv", "groups.csv",
+                "--method", method,
+            ])
+            assert args.method == method
+
+
+class TestClusterCommand:
+    """Tests for cluster command."""
+
+    def test_cluster_parser_arguments(self):
+        """Test cluster command argument parsing."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "cluster", "scores.csv",
+            "-o", "cluster_results/",
+            "--n-clusters", "5",
+            "--method", "kmeans",
+            "--embedding", "umap",
+        ])
+
+        assert args.command == "cluster"
+        assert args.scores == Path("scores.csv")
+        assert args.n_clusters == 5
+        assert args.method == "kmeans"
+        assert args.embedding == "umap"
+
+    def test_cluster_leiden_args(self):
+        """Test cluster command with leiden method."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "cluster", "scores.csv",
+            "--method", "leiden",
+            "--resolution", "0.5",
+            "--plot",
+        ])
+
+        assert args.method == "leiden"
+        assert args.resolution == 0.5
+        assert args.plot is True
+
+    def test_cluster_all_embeddings(self):
+        """Test cluster command accepts all embedding types."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        for emb in ["umap", "tsne", "pca"]:
+            args = parser.parse_args([
+                "cluster", "scores.csv",
+                "--embedding", emb,
+            ])
+            assert args.embedding == emb
+
+
+class TestPathwayCommand:
+    """Tests for pathway command."""
+
+    def test_pathway_parser_arguments(self):
+        """Test pathway command argument parsing."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "pathway", "reactions.txt",
+            "-o", "pathway_results/",
+            "--model", "human",
+            "--method", "subsystem",
+        ])
+
+        assert args.command == "pathway"
+        assert args.reactions == Path("reactions.txt")
+        assert args.model == "human"
+        assert args.method == "subsystem"
+
+    def test_pathway_go_args(self):
+        """Test pathway command with GO enrichment."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "pathway", "reactions.csv",
+            "--method", "go",
+            "--namespace", "biological_process",
+            "--fdr-threshold", "0.1",
+            "--plot",
+        ])
+
+        assert args.method == "go"
+        assert args.namespace == "biological_process"
+        assert args.fdr_threshold == 0.1
+        assert args.plot is True
+
+    def test_pathway_all_namespaces(self):
+        """Test pathway command accepts all GO namespaces."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        for ns in ["biological_process", "molecular_function", "cellular_component", "all"]:
+            args = parser.parse_args([
+                "pathway", "reactions.txt",
+                "--method", "go",
+                "--namespace", ns,
+            ])
+            assert args.namespace == ns
+
+
+class TestDifferentialIntegration:
+    """Integration tests for differential command."""
+
+    @pytest.fixture
+    def mock_scores_file(self, tmp_path):
+        """Create mock reaction scores file."""
+        import numpy as np
+        import pandas as pd
+
+        np.random.seed(42)
+        reactions = [f"R{i}" for i in range(10)]
+        cells = [f"cell_{i}" for i in range(20)]
+        data = np.random.rand(10, 20)
+        # Add signal
+        data[0, :10] += 2.0  # R0 higher in first 10 cells
+        df = pd.DataFrame(data, index=reactions, columns=cells)
+        path = tmp_path / "scores.csv"
+        df.to_csv(path)
+        return path
+
+    @pytest.fixture
+    def mock_groups_file(self, tmp_path):
+        """Create mock groups file."""
+        import pandas as pd
+
+        cells = [f"cell_{i}" for i in range(20)]
+        groups = ["A"] * 10 + ["B"] * 10
+        df = pd.DataFrame({"cell_id": cells, "group": groups})
+        path = tmp_path / "groups.csv"
+        df.to_csv(path, index=False)
+        return path
+
+    def test_differential_integration(self, mock_scores_file, mock_groups_file, tmp_path):
+        """Test differential command integration."""
+        from cellmetpro.cli import main
+
+        output_dir = tmp_path / "diff_output"
+
+        exit_code = main([
+            "differential",
+            str(mock_scores_file),
+            str(mock_groups_file),
+            "-o", str(output_dir),
+            "--method", "wilcoxon",
+        ])
+
+        assert exit_code == 0
+        assert output_dir.exists()
+        # Check output file exists
+        output_files = list(output_dir.glob("differential_*.csv"))
+        assert len(output_files) > 0
+
+    def test_differential_with_plot(self, mock_scores_file, mock_groups_file, tmp_path):
+        """Test differential command with plot generation."""
+        from cellmetpro.cli import main
+
+        output_dir = tmp_path / "diff_output"
+
+        exit_code = main([
+            "differential",
+            str(mock_scores_file),
+            str(mock_groups_file),
+            "-o", str(output_dir),
+            "--plot",
+        ])
+
+        assert exit_code == 0
+        # Check plot file exists
+        assert (output_dir / "volcano_plot.png").exists()
+
+    def test_differential_missing_file(self, tmp_path):
+        """Test differential command with missing file."""
+        from cellmetpro.cli import main
+
+        exit_code = main([
+            "differential",
+            str(tmp_path / "nonexistent.csv"),
+            str(tmp_path / "groups.csv"),
+            "-o", str(tmp_path / "output"),
+        ])
+        assert exit_code == 1
+
+
+class TestClusterIntegration:
+    """Integration tests for cluster command."""
+
+    @pytest.fixture
+    def mock_scores_file(self, tmp_path):
+        """Create mock reaction scores file."""
+        import numpy as np
+        import pandas as pd
+
+        np.random.seed(42)
+        reactions = [f"R{i}" for i in range(10)]
+        cells = [f"cell_{i}" for i in range(20)]
+        data = np.random.rand(10, 20)
+        df = pd.DataFrame(data, index=reactions, columns=cells)
+        path = tmp_path / "scores.csv"
+        df.to_csv(path)
+        return path
+
+    def test_cluster_integration(self, mock_scores_file, tmp_path):
+        """Test cluster command integration."""
+        from cellmetpro.cli import main
+
+        output_dir = tmp_path / "cluster_output"
+
+        exit_code = main([
+            "cluster",
+            str(mock_scores_file),
+            "-o", str(output_dir),
+            "--n-clusters", "2",
+            "--method", "kmeans",
+            "--embedding", "pca",  # Use PCA for speed
+            "--n-pcs", "5",
+        ])
+
+        assert exit_code == 0
+        assert output_dir.exists()
+        assert (output_dir / "clustering_results.csv").exists()
+        assert (output_dir / "cluster_markers.csv").exists()
+
+    def test_cluster_with_plot(self, mock_scores_file, tmp_path):
+        """Test cluster command with plot generation."""
+        from cellmetpro.cli import main
+
+        output_dir = tmp_path / "cluster_output"
+
+        exit_code = main([
+            "cluster",
+            str(mock_scores_file),
+            "-o", str(output_dir),
+            "--n-clusters", "2",
+            "--embedding", "pca",
+            "--n-pcs", "5",
+            "--plot",
+        ])
+
+        assert exit_code == 0
+        assert (output_dir / "embedding_plot.png").exists()
+
+    def test_cluster_missing_file(self, tmp_path):
+        """Test cluster command with missing file."""
+        from cellmetpro.cli import main
+
+        exit_code = main([
+            "cluster",
+            str(tmp_path / "nonexistent.csv"),
+            "-o", str(tmp_path / "output"),
+        ])
+        assert exit_code == 1

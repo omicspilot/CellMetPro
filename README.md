@@ -1,164 +1,230 @@
-# OmicsPilot: Cellular Metabolic Profiler (cellMetPro)
+# CellMetPro
 
-**Visualize and explore cellular metabolic states from scRNA-seq data**
+**Cellular Metabolic Profiler for scRNA-seq data**
 
-A Python-based tool for biotech researchers to analyze and visualize metabolic profiles at single-cell resolution using Flux Balance Analysis (FBA) and Genome-Scale Metabolic Models (GEMs).
+Analyze metabolic activity at single-cell resolution using the COMPASS algorithm. Score reactions, identify metabolic heterogeneity, and discover metabolic programs in your scRNA-seq data.
 
----
-
-## Project Vision
-
-Help researchers **visually explore the metabolic landscape** of their cells to identify biological targets for further investigation. Whether studying immune cells, cancer cells, or stem cells, OmicsPilot provides intuitive visualizations to spot metabolic signatures that distinguish cell populations.
+> **Documentation**: For detailed tutorials and API reference, visit [omicspilot.com/projects/cellmetpro](https://omicspilot.com/projects/cellmetpro)
 
 ---
 
-## What This Tool Can Do
-
-### Core Analysis Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Metabolic Scoring** | Compute reaction activity scores from gene expression using COMPASS algorithm |
-| **Pathway Analysis** | Aggregate reactions into metabolic pathways and metareactions |
-| **Cluster Comparison** | Statistical comparison of metabolic states between cell clusters |
-| **Dimensionality Reduction** | PCA and UMAP projections of metabolic profiles |
-
-### Visualization Capabilities
-
-- **Metabolic UMAP/t-SNE**: Project cells based on metabolic activity rather than gene expression
-- **Pathway Heatmaps**: Compare pathway activity across clusters or conditions
-- **Reaction Dot Plots**: Visualize reaction scores with statistical significance
-- **Volcano Plots**: Identify differentially active reactions between conditions
-- **Metabolite Flow Diagrams**: Track metabolite uptake and secretion patterns
-- **Interactive Dashboards**: Explore data with filtering and drill-down capabilities
+| **COMPASS Algorithm** | Score metabolic reactions from gene expression using genome-scale models |
+| **Differential Analysis** | Compare metabolic activity between cell groups (Wilcoxon, t-test, ANOVA, Kruskal-Wallis) |
+| **Pathway Enrichment** | GO term and subsystem enrichment analysis |
+| **Metabolic Clustering** | PCA, UMAP, t-SNE embeddings with k-means, Leiden, Louvain clustering |
+| **Visualization** | Volcano plots, heatmaps, dotplots, embedding plots |
+| **CLI & Python API** | Full command-line interface and programmatic access |
 
 ---
 
-## Biological Applications
+## Installation
 
-### Supported Cell Types
-Any cell type with scRNA-seq data with available GEM for the relative organism
-
-### Research Questions This Tool Helps Answer
-- Which metabolic pathways are upregulated in disease vs. healthy cells?
-- How do metabolic states differ between cell clusters?
-- What metabolic signatures define specific cell populations?
-- Which reactions could be therapeutic targets?
-
----
-
-## Data Inputs
-
-| Input Type | Format | Description |
-|------------|--------|-------------|
-| Gene Expression | `.csv`, `.tsv`, `.h5ad` | TPM-normalized counts matrix |
-| Cell Metadata | `.csv`, `.tsv` | Cell annotations, cluster labels, conditions
-
-### Supported Organisms
-- Human (Homo sapiens)
-- Mouse (Mus musculus)
-- Extensible to other organisms with GEM models
-
----
-
-## Planned Architecture
-
+```bash
+pip install cellmetpro
 ```
-cellmetpro/
-├── core/
-│   ├── compass.py          # COMPASS algorithm implementation
-│   ├── fba.py              # Flux Balance Analysis utilities
-│   └── preprocessing.py    # Data loading and normalization
-├── analysis/
-│   ├── clustering.py       # Metabolic-based clustering
-│   ├── differential.py     # Statistical comparisons
-│   └── pathway.py          # Pathway aggregation
-├── visualization/
-│   ├── umap.py             # Dimensionality reduction plots
-│   ├── heatmap.py          # Pathway/reaction heatmaps
-│   ├── dotplot.py          # Dot plots with statistics
-│   ├── volcano.py          # Differential analysis plots
-│   └── dashboard.py        # Interactive Streamlit/Dash app
-├── models/
-│   └── gems/               # Genome-scale metabolic models
-└── cli.py                  # Command-line interface
+
+For development:
+```bash
+git clone https://github.com/omicspilot/CellMetPro.git
+cd CellMetPro
+pip install -e ".[dev]"
 ```
 
 ---
 
-## Roadmap
+## Quick Start
 
-### Phase 1: Core Infrastructure
-- [ ] Data loaders for common scRNA-seq formats (AnnData, Seurat objects)
-- [ ] COMPASS algorithm Python implementation
-- [ ] Reaction consistency scoring
-- [ ] Basic CLI for batch processing
+### Command Line
 
-### Phase 2: Visualization Suite
-- [ ] Static publication-ready plots (matplotlib/seaborn)
-- [ ] Interactive plots (Plotly)
-- [ ] Streamlit dashboard for exploration
-- [ ] Export to common formats (PNG, SVG, PDF)
+```bash
+# Run COMPASS analysis
+cellmetpro run expression.h5ad -m human -o results/
 
-### Phase 3: Advanced Analysis
-- [ ] Metabolic trajectory analysis
-- [ ] Multi-sample integration
-- [ ] Perturbation predictions
-- [ ] Report generation
+# Differential analysis between groups
+cellmetpro differential results/reaction_scores.csv groups.csv --plot
 
-### Phase 4: User Experience
-- [ ] Web application deployment
-- [ ] Jupyter notebook widgets
-- [ ] API for programmatic access
-- [ ] Documentation and tutorials
+# Cluster cells by metabolic profile
+cellmetpro cluster results/reaction_scores.csv --method leiden --embedding umap --plot
 
----
-
-## Dependencies
-
+# Pathway enrichment
+cellmetpro pathway significant_reactions.txt --method subsystem --plot
 ```
-# Core
-- numpy
-- pandas
-- scipy
-- scanpy
-- anndata
 
-# Visualization
-- matplotlib
-- seaborn
-- plotly
-- streamlit
+### Python API
 
-# Analysis
-- scikit-learn
-- statsmodels
-- umap-learn
+```python
+import cellmetpro as cmp
 
-# Metabolic modeling
-- cobrapy
+# Load data
+loader = cmp.DataLoader("expression.h5ad")
+adata = loader.load()
+
+# Load metabolic model
+model = cmp.load_gem("human")
+
+# Run COMPASS
+config = cmp.CompassConfig(beta=0.95, n_processes=4)
+scorer = cmp.CompassScorer(model, adata, config)
+result = scorer.score()
+
+# Differential analysis
+from cellmetpro.analysis import DifferentialAnalysis
+da = DifferentialAnalysis(result.reaction_scores, cell_groups)
+diff_results = da.compare_groups("control", "treatment")
+
+# Visualize
+from cellmetpro.visualization import plot_volcano
+plot_volcano(diff_results, save="volcano.png")
 ```
 
 ---
 
-## Background: FBA + GEMs + scRNA-seq
+## Supported Data Formats
 
-**Flux Balance Analysis (FBA)** predicts metabolic fluxes through a biochemical network by optimizing an objective function (e.g., biomass production) subject to stoichiometric constraints.
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| AnnData | `.h5ad` | Scanpy/AnnData objects |
+| CSV | `.csv` | Comma-separated values |
+| TSV | `.tsv` | Tab-separated values |
 
-**Genome-Scale Metabolic Models (GEMs)** are comprehensive reconstructions of an organism's metabolism, containing thousands of reactions and metabolites.
+## Supported Models
 
-**COMPASS** (Characterizing Cell states through metabolic Profiling of the Transcriptome) integrates scRNA-seq data with GEMs to infer metabolic activity at single-cell resolution.
+| Model | Organism | Reactions | Genes |
+|-------|----------|-----------|-------|
+| `human` | Homo sapiens | ~13,000 | ~3,000 |
+| `mouse` | Mus musculus | ~13,000 | ~3,000 |
+| Custom | Any | User-defined | User-defined |
 
-This tool brings these concepts together in an accessible visualization platform.
+---
+
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `cellmetpro run` | Run COMPASS metabolic analysis |
+| `cellmetpro differential` | Compare groups statistically |
+| `cellmetpro cluster` | Cluster cells by metabolic profile |
+| `cellmetpro pathway` | Pathway enrichment analysis |
+| `cellmetpro info` | Show model information |
+| `cellmetpro dashboard` | Launch interactive dashboard |
+
+Run `cellmetpro --help` or `cellmetpro <command> --help` for details.
+
+---
+
+## Analysis Modules
+
+### Differential Analysis
+
+```python
+from cellmetpro.analysis import DifferentialAnalysis
+
+da = DifferentialAnalysis(reaction_scores, groups)
+
+# Pairwise comparison
+results = da.compare_groups("A", "B", method="wilcoxon")
+
+# Multi-group comparison
+results = da.compare_multiple_groups(method="kruskal")
+
+# Post-hoc tests
+posthoc = da.posthoc_tests("reaction_id", method="dunn")
+
+# Effect size
+effect = da.compute_effect_size("A", "B")
+```
+
+### Clustering
+
+```python
+from cellmetpro.analysis import MetabolicClustering
+
+mc = MetabolicClustering(reaction_scores, n_clusters=5)
+mc.compute_pca(n_components=50)
+mc.compute_umap()
+labels = mc.cluster(method="leiden", resolution=1.0)
+markers = mc.get_cluster_markers(n_top=20)
+```
+
+### Pathway Enrichment
+
+```python
+from cellmetpro.analysis import PathwayAnalyzer, GOEnrichmentAnalyzer
+
+# Subsystem enrichment
+pa = PathwayAnalyzer(subsystem_mapping)
+results = pa.enrich(significant_reactions, background=all_reactions)
+
+# GO enrichment
+go = GOEnrichmentAnalyzer(model)
+results = go.enrich_reactions(reactions, namespace="biological_process")
+```
+
+---
+
+## Visualization
+
+```python
+from cellmetpro.visualization import (
+    plot_volcano,
+    plot_reaction_heatmap,
+    plot_reaction_dotplot,
+    plot_embedding,
+    plot_enrichment_dotplot,
+)
+
+# Volcano plot
+plot_volcano(diff_results, log2fc_threshold=0.5, pvalue_threshold=0.05)
+
+# Heatmap with groups
+plot_reaction_heatmap(scores, groups, reactions=top_reactions)
+
+# Dotplot
+plot_reaction_dotplot(scores, groups, reactions=markers)
+
+# Embedding
+plot_embedding(umap_coords, color=cluster_labels)
+
+# Enrichment dotplot
+plot_enrichment_dotplot(enrichment_results)
+```
+
+---
+
+## Background
+
+**COMPASS** (Characterizing Cell states through metabolic Profiling of the Transcriptome) integrates scRNA-seq data with Genome-Scale Metabolic Models (GEMs) to infer metabolic activity at single-cell resolution.
+
+The algorithm:
+1. Maps gene expression to reaction penalties
+2. Optimizes flux through each reaction subject to stoichiometric constraints
+3. Scores reactions based on consistency with expression data
+
+---
+
+## Citation
+
+If you use CellMetPro in your research, please cite:
+
+```
+Wagner et al. (2021). Metabolic modeling of single Th17 cells reveals
+regulators of autoimmunity. Cell, 184(16), 4168-4185.
+```
 
 ---
 
 ## License
 
-MIT License © 2025 Omics Pilot
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## Contributing
+## Links
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+- **Documentation**: [omicspilot.com/projects/cellmetpro](https://omicspilot.com/projects/cellmetpro)
+- **Source Code**: [github.com/omicspilot/CellMetPro](https://github.com/omicspilot/CellMetPro)
+- **Issues**: [github.com/omicspilot/CellMetPro/issues](https://github.com/omicspilot/CellMetPro/issues)

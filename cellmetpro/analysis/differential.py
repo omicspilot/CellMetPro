@@ -252,3 +252,392 @@ class DifferentialAnalysis:
 
         results_df = pd.DataFrame(results)
         return results_df.sort_values("abs_cohens_d", ascending=False)
+
+    def compare_multiple_groups(
+        self,
+        groups: list[str] | None = None,
+        method: Literal["anova", "kruskal"] = "kruskal",
+    ) -> pd.DataFrame:
+        """Compare metabolic activity across multiple groups.
+
+        Performs ANOVA (parametric) or Kruskal-Wallis (non-parametric) tests
+        for each reaction to identify those with significant differences
+        across groups.
+
+        Parameters
+        ----------
+        groups : list[str], optional
+            Groups to compare. If None, uses all unique groups.
+        method : str
+            Statistical test: 'anova' for one-way ANOVA (parametric),
+            'kruskal' for Kruskal-Wallis (non-parametric, recommended for
+            non-normal distributions typical in single-cell data).
+
+        Returns
+        -------
+        pd.DataFrame
+            Results with columns: reaction, statistic, pvalue, padj_bh, padj_bonf,
+            plus mean and std for each group.
+
+        Notes
+        -----
+        The Kruskal-Wallis test is the non-parametric equivalent of one-way
+        ANOVA and is recommended for single-cell data where normality
+        assumptions may not hold.
+
+        Example
+        -------
+        >>> da = DifferentialAnalysis(reaction_scores, cell_groups)
+        >>> results = da.compare_multiple_groups(method="kruskal")
+        >>> significant = results[results["padj_bh"] < 0.05]
+        """
+        assert method in {"anova", "kruskal"}, f"Invalid method: {method}"
+
+        # Ensure columns in reaction_scores match index in groups
+        common_cells = self.reaction_scores.columns.intersection(self.groups.index)
+        scores = self.reaction_scores[common_cells]
+        group_labels = self.groups[common_cells]
+
+        # Determine groups to compare
+        if groups is None:
+            groups = sorted(group_labels.unique())
+        else:
+            groups = [g for g in groups if g in group_labels.unique()]
+
+        if len(groups) < 2:
+            raise ValueError("Need at least 2 groups for comparison")
+
+        # Get cells for each group
+        group_cells = {g: group_labels[group_labels == g].index for g in groups}
+
+        results = []
+        for reaction_id in scores.index:
+            # Get scores for each group
+            group_scores = [scores.loc[reaction_id, cells].values for cells in group_cells.values()]
+
+            # Run statistical test
+            if method == "anova":
+                stat, pval = stats.f_oneway(*group_scores)
+            else:  # kruskal
+                stat, pval = stats.kruskal(*group_scores)
+
+            # Compute group statistics
+            row = {
+                "reaction": reaction_id,
+                "statistic": stat,
+                "pvalue": pval,
+                "n_groups": len(groups),
+            }
+
+            # Add mean and std for each group
+            for g, cells in group_cells.items():
+                g_scores = scores.loc[reaction_id, cells]
+                row[f"{g}_mean"] = np.mean(g_scores)
+                row[f"{g}_std"] = np.std(g_scores)
+                row[f"{g}_n"] = len(cells)
+
+            results.append(row)
+
+        # FDR correction
+        results_df = pd.DataFrame(results)
+        _, padj_bh, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")
+        _, padj_bonf, _, _ = multipletests(results_df["pvalue"], method="bonferroni")
+
+        results_df["padj_bh"] = padj_bh
+        results_df["padj_bonf"] = padj_bonf
+
+        return results_df.sort_values("pvalue")
+
+    def posthoc_tests(
+        self,
+        reaction: str,
+        groups: list[str] | None = None,
+        method: Literal["tukey", "dunn", "conover"] = "dunn",
+    ) -> pd.DataFrame:
+        """Perform post-hoc pairwise comparisons after multi-group test.
+
+        After finding significant differences with compare_multiple_groups(),
+        use this method to identify which specific pairs of groups differ.
+
+        Parameters
+        ----------
+        reaction : str
+            Reaction ID to analyze.
+        groups : list[str], optional
+            Groups to compare. If None, uses all unique groups.
+        method : str
+            Post-hoc test method:
+            - 'tukey': Tukey's HSD (for use after ANOVA, assumes normality)
+            - 'dunn': Dunn's test with Bonferroni correction
+              (for use after Kruskal-Wallis, non-parametric)
+            - 'conover': Conover's test (for use after Kruskal-Wallis)
+
+        Returns
+        -------
+        pd.DataFrame
+            Pairwise comparisons with columns: group1, group2, statistic,
+            pvalue, padj, significant.
+
+        Example
+        -------
+        >>> da = DifferentialAnalysis(reaction_scores, cell_groups)
+        >>> # First find reactions with significant multi-group differences
+        >>> multi_results = da.compare_multiple_groups()
+        >>> sig_reactions = multi_results[multi_results["padj_bh"] < 0.05]["reaction"]
+        >>> # Then do post-hoc for specific reaction
+        >>> posthoc = da.posthoc_tests("R1", method="dunn")
+        """
+        assert method in {"tukey", "dunn", "conover"}, f"Invalid method: {method}"
+
+        if reaction not in self.reaction_scores.index:
+            raise ValueError(f"Reaction {reaction} not found in data")
+
+        # Ensure columns match
+        common_cells = self.reaction_scores.columns.intersection(self.groups.index)
+        scores = self.reaction_scores.loc[reaction, common_cells]
+        group_labels = self.groups[common_cells]
+
+        # Determine groups to compare
+        if groups is None:
+            groups = sorted(group_labels.unique())
+        else:
+            groups = [g for g in groups if g in group_labels.unique()]
+
+        if len(groups) < 2:
+            raise ValueError("Need at least 2 groups for comparison")
+
+        # Get scores for each group
+        group_data = {g: scores[group_labels == g].values for g in groups}
+
+        if method == "tukey":
+            return self._posthoc_tukey(group_data, groups)
+        elif method == "dunn":
+            return self._posthoc_dunn(group_data, groups)
+        else:  # conover
+            return self._posthoc_conover(group_data, groups)
+
+    def _posthoc_tukey(
+        self,
+        group_data: dict[str, np.ndarray],
+        groups: list[str],
+    ) -> pd.DataFrame:
+        """Tukey's HSD post-hoc test."""
+        from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+        # Prepare data for statsmodels
+        all_values = []
+        all_groups = []
+        for g in groups:
+            all_values.extend(group_data[g])
+            all_groups.extend([g] * len(group_data[g]))
+
+        # Run Tukey HSD
+        tukey_result = pairwise_tukeyhsd(all_values, all_groups)
+
+        # Extract results
+        results = []
+        for i in range(len(tukey_result.groupsunique)):
+            for j in range(i + 1, len(tukey_result.groupsunique)):
+                idx = i * (len(tukey_result.groupsunique) - 1) - i * (i - 1) // 2 + (j - i - 1)
+                if idx < len(tukey_result.pvalues):
+                    results.append({
+                        "group1": tukey_result.groupsunique[i],
+                        "group2": tukey_result.groupsunique[j],
+                        "mean_diff": tukey_result.meandiffs[idx],
+                        "pvalue": tukey_result.pvalues[idx],
+                        "significant": tukey_result.reject[idx],
+                    })
+
+        return pd.DataFrame(results)
+
+    def _posthoc_dunn(
+        self,
+        group_data: dict[str, np.ndarray],
+        groups: list[str],
+    ) -> pd.DataFrame:
+        """Dunn's test for pairwise comparisons after Kruskal-Wallis.
+
+        Uses Bonferroni correction for multiple comparisons.
+        """
+        # Combine all data and compute ranks
+        all_values = np.concatenate([group_data[g] for g in groups])
+        ranks = stats.rankdata(all_values)
+
+        # Map ranks back to groups
+        group_ranks = {}
+        idx = 0
+        for g in groups:
+            n = len(group_data[g])
+            group_ranks[g] = ranks[idx:idx + n]
+            idx += n
+
+        N = len(all_values)  # Total sample size
+        n_comparisons = len(groups) * (len(groups) - 1) // 2
+
+        results = []
+        for i, g1 in enumerate(groups):
+            for g2 in groups[i + 1:]:
+                n1 = len(group_data[g1])
+                n2 = len(group_data[g2])
+
+                # Mean ranks
+                mean_rank1 = np.mean(group_ranks[g1])
+                mean_rank2 = np.mean(group_ranks[g2])
+
+                # Standard error of difference
+                # Tie correction
+                tie_correction = 1.0
+                _, counts = np.unique(all_values, return_counts=True)
+                if np.any(counts > 1):
+                    tie_correction = 1 - np.sum(counts**3 - counts) / (N**3 - N)
+
+                se = np.sqrt(
+                    (N * (N + 1) / 12 - tie_correction) * (1/n1 + 1/n2)
+                )
+
+                if se > 0:
+                    z = (mean_rank1 - mean_rank2) / se
+                    # Two-tailed p-value
+                    pval = 2 * (1 - stats.norm.cdf(abs(z)))
+                else:
+                    z = 0.0
+                    pval = 1.0
+
+                # Bonferroni correction
+                padj = min(pval * n_comparisons, 1.0)
+
+                results.append({
+                    "group1": g1,
+                    "group2": g2,
+                    "mean_rank1": mean_rank1,
+                    "mean_rank2": mean_rank2,
+                    "z_statistic": z,
+                    "pvalue": pval,
+                    "padj": padj,
+                    "significant": padj < 0.05,
+                })
+
+        return pd.DataFrame(results).sort_values("pvalue")
+
+    def _posthoc_conover(
+        self,
+        group_data: dict[str, np.ndarray],
+        groups: list[str],
+    ) -> pd.DataFrame:
+        """Conover's test for pairwise comparisons after Kruskal-Wallis.
+
+        Conover's test is more powerful than Dunn's test but assumes
+        that the Kruskal-Wallis test was significant.
+        """
+        # First perform Kruskal-Wallis to get H statistic
+        group_arrays = [group_data[g] for g in groups]
+        H, _ = stats.kruskal(*group_arrays)
+
+        # Combine all data and compute ranks
+        all_values = np.concatenate(group_arrays)
+        ranks = stats.rankdata(all_values)
+
+        # Map ranks back to groups
+        group_ranks = {}
+        idx = 0
+        for g in groups:
+            n = len(group_data[g])
+            group_ranks[g] = ranks[idx:idx + n]
+            idx += n
+
+        N = len(all_values)
+        k = len(groups)
+        n_comparisons = k * (k - 1) // 2
+
+        # Calculate S^2 (variance of ranks)
+        S2 = (1 / (N - 1)) * (np.sum(ranks**2) - N * ((N + 1) / 2)**2)
+
+        # Calculate A term
+        A = S2 * (N - 1 - H) / (N - k)
+
+        results = []
+        for i, g1 in enumerate(groups):
+            for g2 in groups[i + 1:]:
+                n1 = len(group_data[g1])
+                n2 = len(group_data[g2])
+
+                mean_rank1 = np.mean(group_ranks[g1])
+                mean_rank2 = np.mean(group_ranks[g2])
+
+                # Test statistic
+                denominator = np.sqrt(A * (1/n1 + 1/n2))
+                if denominator > 0:
+                    t = (mean_rank1 - mean_rank2) / denominator
+                    # Two-tailed p-value using t-distribution
+                    df = N - k
+                    pval = 2 * (1 - stats.t.cdf(abs(t), df))
+                else:
+                    t = 0.0
+                    pval = 1.0
+
+                # Bonferroni correction
+                padj = min(pval * n_comparisons, 1.0)
+
+                results.append({
+                    "group1": g1,
+                    "group2": g2,
+                    "mean_rank1": mean_rank1,
+                    "mean_rank2": mean_rank2,
+                    "t_statistic": t,
+                    "pvalue": pval,
+                    "padj": padj,
+                    "significant": padj < 0.05,
+                })
+
+        return pd.DataFrame(results).sort_values("pvalue")
+
+    def all_pairwise_comparisons(
+        self,
+        groups: list[str] | None = None,
+        method: Literal["wilcoxon", "ttest", "mannwhitneyu"] = "wilcoxon",
+    ) -> pd.DataFrame:
+        """Perform all pairwise comparisons between groups.
+
+        This is useful when you want to see how each pair of groups
+        differs for all reactions, rather than focusing on a single reaction.
+
+        Parameters
+        ----------
+        groups : list[str], optional
+            Groups to compare. If None, uses all unique groups.
+        method : str
+            Statistical test to use for pairwise comparisons.
+
+        Returns
+        -------
+        pd.DataFrame
+            Results for all pairwise comparisons with columns:
+            comparison, reaction, group1_mean, group2_mean, log2fc, pvalue, padj.
+
+        Example
+        -------
+        >>> da = DifferentialAnalysis(reaction_scores, cell_groups)
+        >>> all_pairs = da.all_pairwise_comparisons()
+        >>> # Filter for specific comparison
+        >>> a_vs_b = all_pairs[all_pairs["comparison"] == "A_vs_B"]
+        """
+        # Determine groups to compare
+        if groups is None:
+            groups = sorted(self.groups.unique())
+        else:
+            groups = [g for g in groups if g in self.groups.unique()]
+
+        if len(groups) < 2:
+            raise ValueError("Need at least 2 groups for comparison")
+
+        all_results = []
+        for i, g1 in enumerate(groups):
+            for g2 in groups[i + 1:]:
+                comparison_name = f"{g1}_vs_{g2}"
+                result = self.compare_groups(g1, g2, method=method)
+                result["comparison"] = comparison_name
+                result["group1"] = g1
+                result["group2"] = g2
+                all_results.append(result)
+
+        return pd.concat(all_results, ignore_index=True)

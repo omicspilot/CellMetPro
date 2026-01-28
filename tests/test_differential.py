@@ -378,3 +378,261 @@ def test_compute_effect_size_abs_matches(reaction_scores, group_labels):
 
     for _, row in result.iterrows():
         np.testing.assert_almost_equal(row["abs_cohens_d"], abs(row["cohens_d"]))
+
+
+# =============================================================================
+# FIXTURES FOR MULTI-GROUP TESTS
+# =============================================================================
+
+
+@pytest.fixture
+def multi_group_reaction_scores():
+    """Create mock reaction scores with 3 groups."""
+    np.random.seed(42)
+
+    # 5 reactions, 15 cells (5 per group)
+    reactions = ["R1", "R2", "R3", "R4", "R5"]
+    cells = [f"cell_{i}" for i in range(15)]
+
+    # Create base data
+    data = np.random.rand(5, 15)
+
+    # Make R1 clearly different across groups
+    # Group A (cells 0-4): low values
+    data[0, 0:5] = np.random.rand(5) * 0.5
+    # Group B (cells 5-9): medium values
+    data[0, 5:10] = np.random.rand(5) * 0.5 + 1.5
+    # Group C (cells 10-14): high values
+    data[0, 10:15] = np.random.rand(5) * 0.5 + 3.0
+
+    # Make R2 different between A and C but not B
+    data[1, 0:5] = np.random.rand(5) * 0.5
+    data[1, 5:10] = np.random.rand(5) * 0.5 + 0.5
+    data[1, 10:15] = np.random.rand(5) * 0.5 + 2.0
+
+    return pd.DataFrame(data, index=reactions, columns=cells)
+
+
+@pytest.fixture
+def multi_group_labels():
+    """Create group labels for 3 groups."""
+    cells = [f"cell_{i}" for i in range(15)]
+    groups = ["A"] * 5 + ["B"] * 5 + ["C"] * 5
+    return pd.Series(groups, index=cells)
+
+
+# =============================================================================
+# TESTS FOR compare_multiple_groups()
+# =============================================================================
+
+
+def test_compare_multiple_groups_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+    """Test that compare_multiple_groups returns DataFrame with expected columns."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.compare_multiple_groups()
+
+    assert isinstance(result, pd.DataFrame)
+
+    # Check expected columns
+    expected_cols = ["reaction", "statistic", "pvalue", "n_groups", "padj_bh", "padj_bonf"]
+    for col in expected_cols:
+        assert col in result.columns
+
+    # Check group-specific columns exist
+    for group in ["A", "B", "C"]:
+        assert f"{group}_mean" in result.columns
+        assert f"{group}_std" in result.columns
+        assert f"{group}_n" in result.columns
+
+
+def test_compare_multiple_groups_kruskal(multi_group_reaction_scores, multi_group_labels):
+    """Test Kruskal-Wallis method."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.compare_multiple_groups(method="kruskal")
+
+    assert len(result) == 5  # 5 reactions
+    assert not result["pvalue"].isna().any()
+
+
+def test_compare_multiple_groups_anova(multi_group_reaction_scores, multi_group_labels):
+    """Test ANOVA method."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.compare_multiple_groups(method="anova")
+
+    assert len(result) == 5
+    assert not result["pvalue"].isna().any()
+
+
+def test_compare_multiple_groups_detects_difference(multi_group_reaction_scores, multi_group_labels):
+    """Test that reactions with clear differences have low p-values."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.compare_multiple_groups(method="kruskal")
+
+    # R1 was made to differ clearly across groups
+    r1_pval = result[result["reaction"] == "R1"]["pvalue"].iloc[0]
+    assert r1_pval < 0.05, f"R1 should be significant, got p={r1_pval}"
+
+
+def test_compare_multiple_groups_sorted_by_pvalue(multi_group_reaction_scores, multi_group_labels):
+    """Test that results are sorted by p-value."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.compare_multiple_groups()
+
+    pvalues = result["pvalue"].values
+    assert all(pvalues[i] <= pvalues[i + 1] for i in range(len(pvalues) - 1))
+
+
+def test_compare_multiple_groups_subset_of_groups(multi_group_reaction_scores, multi_group_labels):
+    """Test comparison with subset of groups."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.compare_multiple_groups(groups=["A", "C"])
+
+    assert result["n_groups"].iloc[0] == 2
+    assert "A_mean" in result.columns
+    assert "C_mean" in result.columns
+    # B should not be included
+    assert "B_mean" not in result.columns
+
+
+def test_compare_multiple_groups_invalid_method(multi_group_reaction_scores, multi_group_labels):
+    """Test that invalid method raises error."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+
+    with pytest.raises(AssertionError):
+        da.compare_multiple_groups(method="invalid")
+
+
+def test_compare_multiple_groups_too_few_groups(multi_group_reaction_scores, multi_group_labels):
+    """Test error when only one group specified."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+
+    with pytest.raises(ValueError):
+        da.compare_multiple_groups(groups=["A"])
+
+
+# =============================================================================
+# TESTS FOR posthoc_tests()
+# =============================================================================
+
+
+def test_posthoc_dunn_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+    """Test that Dunn's post-hoc test returns DataFrame."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.posthoc_tests("R1", method="dunn")
+
+    assert isinstance(result, pd.DataFrame)
+
+    # Should have n*(n-1)/2 = 3 pairwise comparisons for 3 groups
+    assert len(result) == 3
+
+    # Check expected columns
+    expected_cols = ["group1", "group2", "pvalue", "padj", "significant"]
+    for col in expected_cols:
+        assert col in result.columns
+
+
+def test_posthoc_tukey_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+    """Test that Tukey's HSD post-hoc test returns DataFrame."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.posthoc_tests("R1", method="tukey")
+
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 3  # 3 pairwise comparisons
+
+
+def test_posthoc_conover_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+    """Test that Conover's post-hoc test returns DataFrame."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.posthoc_tests("R1", method="conover")
+
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 3
+
+
+def test_posthoc_detects_significant_pairs(multi_group_reaction_scores, multi_group_labels):
+    """Test that post-hoc test identifies significant pairwise differences."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+
+    # R1 was made to differ between A and C
+    result = da.posthoc_tests("R1", method="dunn")
+
+    # Find A vs C comparison
+    a_vs_c = result[(result["group1"] == "A") & (result["group2"] == "C")]
+    if len(a_vs_c) == 0:
+        a_vs_c = result[(result["group1"] == "C") & (result["group2"] == "A")]
+
+    assert len(a_vs_c) == 1
+    assert a_vs_c["padj"].iloc[0] < 0.05, "A vs C should be significant"
+
+
+def test_posthoc_invalid_reaction(multi_group_reaction_scores, multi_group_labels):
+    """Test error when reaction not found."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+
+    with pytest.raises(ValueError):
+        da.posthoc_tests("nonexistent_reaction")
+
+
+def test_posthoc_invalid_method(multi_group_reaction_scores, multi_group_labels):
+    """Test error when invalid method specified."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+
+    with pytest.raises(AssertionError):
+        da.posthoc_tests("R1", method="invalid")
+
+
+def test_posthoc_pvalues_in_range(multi_group_reaction_scores, multi_group_labels):
+    """Test that p-values are in valid range [0, 1]."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+
+    for method in ["dunn", "tukey", "conover"]:
+        result = da.posthoc_tests("R1", method=method)
+        assert (result["pvalue"] >= 0).all()
+        assert (result["pvalue"] <= 1).all()
+
+
+# =============================================================================
+# TESTS FOR all_pairwise_comparisons()
+# =============================================================================
+
+
+def test_all_pairwise_comparisons_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+    """Test that all_pairwise_comparisons returns DataFrame."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.all_pairwise_comparisons()
+
+    assert isinstance(result, pd.DataFrame)
+
+    # Check expected columns
+    expected_cols = ["comparison", "reaction", "group1", "group2", "log2fc", "pvalue"]
+    for col in expected_cols:
+        assert col in result.columns
+
+
+def test_all_pairwise_comparisons_correct_count(multi_group_reaction_scores, multi_group_labels):
+    """Test correct number of comparisons."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.all_pairwise_comparisons()
+
+    # 5 reactions x 3 pairwise comparisons = 15 rows
+    assert len(result) == 15
+
+
+def test_all_pairwise_comparisons_subset_groups(multi_group_reaction_scores, multi_group_labels):
+    """Test with subset of groups."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+    result = da.all_pairwise_comparisons(groups=["A", "B"])
+
+    # 5 reactions x 1 comparison = 5 rows
+    assert len(result) == 5
+    assert result["comparison"].unique()[0] == "A_vs_B"
+
+
+def test_all_pairwise_comparisons_methods(multi_group_reaction_scores, multi_group_labels):
+    """Test that different methods work."""
+    da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
+
+    for method in ["wilcoxon", "ttest", "mannwhitneyu"]:
+        result = da.all_pairwise_comparisons(method=method)
+        assert len(result) == 15
+        assert not result["pvalue"].isna().any()

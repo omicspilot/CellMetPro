@@ -38,6 +38,7 @@ dependencies = [
     "statsmodels>=0.14",
     "umap-learn>=0.5",
     "cobra>=0.26",
+    "rich-argparse>=1.4",
 ]
 
 [project.optional-dependencies]

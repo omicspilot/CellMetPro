@@ -144,3 +144,6 @@ work/
 
 # Conda
 *.conda
+
+
+.claude

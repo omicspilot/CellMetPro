@@ -261,7 +261,10 @@ def test_rank_reactions_sorted(reaction_scores, group_labels):
     result = da.rank_reactions("A")
 
     mean_scores = result["mean_score"].values
-    assert all(mean_scores[i] <= mean_scores[i + 1] for i in range(len(mean_scores) - 1))
+    is_sorted = all(
+        mean_scores[i] <= mean_scores[i + 1] for i in range(len(mean_scores) - 1)
+    )
+    assert is_sorted
 
 
 ## TEST M: rank_reactions rank column is correct
@@ -309,7 +312,7 @@ def test_compute_effect_size_returns_dataframe(reaction_scores, group_labels):
 ## TEST P: compute_effect_size sorted by absolute effect size
 
 def test_compute_effect_size_sorted(reaction_scores, group_labels):
-    """Test that results are sorted by abs_cohens_d descending (largest effect first)."""
+    """Test results are sorted by abs_cohens_d descending (largest first)."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
     result = da.compute_effect_size("A", "B")
 
@@ -343,8 +346,10 @@ def test_compute_effect_size_detects_large_effects(reaction_scores, group_labels
     r2_row = result[result["reaction"] == "R2"].iloc[0]
 
     # These should have large effect sizes
-    assert r1_row["interpretation"] == "large", f"R1 should have large effect, got {r1_row['interpretation']}"
-    assert r2_row["interpretation"] == "large", f"R2 should have large effect, got {r2_row['interpretation']}"
+    r1_interp = r1_row["interpretation"]
+    r2_interp = r2_row["interpretation"]
+    assert r1_interp == "large", f"R1 should have large effect, got {r1_interp}"
+    assert r2_interp == "large", f"R2 should have large effect, got {r2_interp}"
 
 
 ## TEST S: compute_effect_size direction matches Cohen's d sign
@@ -425,15 +430,19 @@ def multi_group_labels():
 # =============================================================================
 
 
-def test_compare_multiple_groups_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
-    """Test that compare_multiple_groups returns DataFrame with expected columns."""
+def test_compare_multiple_groups_returns_dataframe(
+    multi_group_reaction_scores, multi_group_labels
+):
+    """Test compare_multiple_groups returns DataFrame with expected columns."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.compare_multiple_groups()
 
     assert isinstance(result, pd.DataFrame)
 
     # Check expected columns
-    expected_cols = ["reaction", "statistic", "pvalue", "n_groups", "padj_bh", "padj_bonf"]
+    expected_cols = [
+        "reaction", "statistic", "pvalue", "n_groups", "padj_bh", "padj_bonf"
+    ]
     for col in expected_cols:
         assert col in result.columns
 
@@ -444,7 +453,9 @@ def test_compare_multiple_groups_returns_dataframe(multi_group_reaction_scores, 
         assert f"{group}_n" in result.columns
 
 
-def test_compare_multiple_groups_kruskal(multi_group_reaction_scores, multi_group_labels):
+def test_compare_multiple_groups_kruskal(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test Kruskal-Wallis method."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.compare_multiple_groups(method="kruskal")
@@ -453,7 +464,9 @@ def test_compare_multiple_groups_kruskal(multi_group_reaction_scores, multi_grou
     assert not result["pvalue"].isna().any()
 
 
-def test_compare_multiple_groups_anova(multi_group_reaction_scores, multi_group_labels):
+def test_compare_multiple_groups_anova(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test ANOVA method."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.compare_multiple_groups(method="anova")
@@ -462,7 +475,9 @@ def test_compare_multiple_groups_anova(multi_group_reaction_scores, multi_group_
     assert not result["pvalue"].isna().any()
 
 
-def test_compare_multiple_groups_detects_difference(multi_group_reaction_scores, multi_group_labels):
+def test_compare_multiple_groups_detects_difference(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that reactions with clear differences have low p-values."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.compare_multiple_groups(method="kruskal")
@@ -472,7 +487,9 @@ def test_compare_multiple_groups_detects_difference(multi_group_reaction_scores,
     assert r1_pval < 0.05, f"R1 should be significant, got p={r1_pval}"
 
 
-def test_compare_multiple_groups_sorted_by_pvalue(multi_group_reaction_scores, multi_group_labels):
+def test_compare_multiple_groups_sorted_by_pvalue(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that results are sorted by p-value."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.compare_multiple_groups()
@@ -481,7 +498,9 @@ def test_compare_multiple_groups_sorted_by_pvalue(multi_group_reaction_scores, m
     assert all(pvalues[i] <= pvalues[i + 1] for i in range(len(pvalues) - 1))
 
 
-def test_compare_multiple_groups_subset_of_groups(multi_group_reaction_scores, multi_group_labels):
+def test_compare_multiple_groups_subset_of_groups(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test comparison with subset of groups."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.compare_multiple_groups(groups=["A", "C"])
@@ -493,7 +512,9 @@ def test_compare_multiple_groups_subset_of_groups(multi_group_reaction_scores, m
     assert "B_mean" not in result.columns
 
 
-def test_compare_multiple_groups_invalid_method(multi_group_reaction_scores, multi_group_labels):
+def test_compare_multiple_groups_invalid_method(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that invalid method raises error."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -501,7 +522,9 @@ def test_compare_multiple_groups_invalid_method(multi_group_reaction_scores, mul
         da.compare_multiple_groups(method="invalid")
 
 
-def test_compare_multiple_groups_too_few_groups(multi_group_reaction_scores, multi_group_labels):
+def test_compare_multiple_groups_too_few_groups(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test error when only one group specified."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -514,7 +537,9 @@ def test_compare_multiple_groups_too_few_groups(multi_group_reaction_scores, mul
 # =============================================================================
 
 
-def test_posthoc_dunn_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+def test_posthoc_dunn_returns_dataframe(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that Dunn's post-hoc test returns DataFrame."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.posthoc_tests("R1", method="dunn")
@@ -530,7 +555,9 @@ def test_posthoc_dunn_returns_dataframe(multi_group_reaction_scores, multi_group
         assert col in result.columns
 
 
-def test_posthoc_tukey_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+def test_posthoc_tukey_returns_dataframe(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that Tukey's HSD post-hoc test returns DataFrame."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.posthoc_tests("R1", method="tukey")
@@ -539,7 +566,9 @@ def test_posthoc_tukey_returns_dataframe(multi_group_reaction_scores, multi_grou
     assert len(result) == 3  # 3 pairwise comparisons
 
 
-def test_posthoc_conover_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+def test_posthoc_conover_returns_dataframe(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that Conover's post-hoc test returns DataFrame."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.posthoc_tests("R1", method="conover")
@@ -548,7 +577,9 @@ def test_posthoc_conover_returns_dataframe(multi_group_reaction_scores, multi_gr
     assert len(result) == 3
 
 
-def test_posthoc_detects_significant_pairs(multi_group_reaction_scores, multi_group_labels):
+def test_posthoc_detects_significant_pairs(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that post-hoc test identifies significant pairwise differences."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -564,7 +595,9 @@ def test_posthoc_detects_significant_pairs(multi_group_reaction_scores, multi_gr
     assert a_vs_c["padj"].iloc[0] < 0.05, "A vs C should be significant"
 
 
-def test_posthoc_invalid_reaction(multi_group_reaction_scores, multi_group_labels):
+def test_posthoc_invalid_reaction(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test error when reaction not found."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -572,7 +605,9 @@ def test_posthoc_invalid_reaction(multi_group_reaction_scores, multi_group_label
         da.posthoc_tests("nonexistent_reaction")
 
 
-def test_posthoc_invalid_method(multi_group_reaction_scores, multi_group_labels):
+def test_posthoc_invalid_method(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test error when invalid method specified."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -580,7 +615,9 @@ def test_posthoc_invalid_method(multi_group_reaction_scores, multi_group_labels)
         da.posthoc_tests("R1", method="invalid")
 
 
-def test_posthoc_pvalues_in_range(multi_group_reaction_scores, multi_group_labels):
+def test_posthoc_pvalues_in_range(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that p-values are in valid range [0, 1]."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -595,7 +632,9 @@ def test_posthoc_pvalues_in_range(multi_group_reaction_scores, multi_group_label
 # =============================================================================
 
 
-def test_all_pairwise_comparisons_returns_dataframe(multi_group_reaction_scores, multi_group_labels):
+def test_all_pairwise_comparisons_returns_dataframe(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that all_pairwise_comparisons returns DataFrame."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.all_pairwise_comparisons()
@@ -603,12 +642,16 @@ def test_all_pairwise_comparisons_returns_dataframe(multi_group_reaction_scores,
     assert isinstance(result, pd.DataFrame)
 
     # Check expected columns
-    expected_cols = ["comparison", "reaction", "group1", "group2", "log2fc", "pvalue"]
+    expected_cols = [
+        "comparison", "reaction", "group1", "group2", "log2fc", "pvalue"
+    ]
     for col in expected_cols:
         assert col in result.columns
 
 
-def test_all_pairwise_comparisons_correct_count(multi_group_reaction_scores, multi_group_labels):
+def test_all_pairwise_comparisons_correct_count(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test correct number of comparisons."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.all_pairwise_comparisons()
@@ -617,7 +660,9 @@ def test_all_pairwise_comparisons_correct_count(multi_group_reaction_scores, mul
     assert len(result) == 15
 
 
-def test_all_pairwise_comparisons_subset_groups(multi_group_reaction_scores, multi_group_labels):
+def test_all_pairwise_comparisons_subset_groups(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test with subset of groups."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.all_pairwise_comparisons(groups=["A", "B"])
@@ -627,7 +672,9 @@ def test_all_pairwise_comparisons_subset_groups(multi_group_reaction_scores, mul
     assert result["comparison"].unique()[0] == "A_vs_B"
 
 
-def test_all_pairwise_comparisons_methods(multi_group_reaction_scores, multi_group_labels):
+def test_all_pairwise_comparisons_methods(
+    multi_group_reaction_scores, multi_group_labels
+):
     """Test that different methods work."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 

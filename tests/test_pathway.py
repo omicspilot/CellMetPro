@@ -169,7 +169,9 @@ def test_go_enrichment_get_reaction_go_terms(model_with_subsystems, go_annotatio
     assert "GO:0005737" in r1_terms
 
 
-def test_go_enrichment_get_go_to_reactions_mapping(model_with_subsystems, go_annotations):
+def test_go_enrichment_get_go_to_reactions_mapping(
+    model_with_subsystems, go_annotations
+):
     """Test GO to reactions mapping."""
     analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
     mapping = analyzer.get_go_to_reactions_mapping()
@@ -239,7 +241,9 @@ def test_go_enrichment_from_differential(model_with_subsystems, go_annotations):
     assert isinstance(results, pd.DataFrame)
 
 
-def test_go_enrichment_fold_enrichment_calculation(model_with_subsystems, go_annotations):
+def test_go_enrichment_fold_enrichment_calculation(
+    model_with_subsystems, go_annotations
+):
     """Test that fold enrichment is calculated correctly."""
     analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
 

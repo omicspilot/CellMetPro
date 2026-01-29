@@ -387,7 +387,10 @@ class TestPathwayCommand:
 
         parser = create_parser()
 
-        for ns in ["biological_process", "molecular_function", "cellular_component", "all"]:
+        namespaces = [
+            "biological_process", "molecular_function", "cellular_component", "all"
+        ]
+        for ns in namespaces:
             args = parser.parse_args([
                 "pathway", "reactions.txt",
                 "--method", "go",
@@ -428,7 +431,9 @@ class TestDifferentialIntegration:
         df.to_csv(path, index=False)
         return path
 
-    def test_differential_integration(self, mock_scores_file, mock_groups_file, tmp_path):
+    def test_differential_integration(
+        self, mock_scores_file, mock_groups_file, tmp_path
+    ):
         """Test differential command integration."""
         from cellmetpro.cli import main
 

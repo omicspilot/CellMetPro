@@ -583,6 +583,9 @@ def subsystem_enrichment(
     sig_reactions = set(significant_reactions)
     bg_reactions = set(background)
 
+    if len(bg_reactions) == 0:
+        raise ValueError("Background reaction set cannot be empty")
+
     results = []
 
     for pathway, reactions in subsystem_mapping.items():

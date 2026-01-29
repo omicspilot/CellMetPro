@@ -343,3 +343,155 @@ def test_embedding_save(embedding, tmp_path):
 
     assert save_path.exists()
     plt.close()
+
+
+# =============================================================================
+# TESTS FOR VIOLIN PLOTS
+# =============================================================================
+
+
+def test_plot_reaction_violin_returns_figure(reaction_scores, groups):
+    """Test that plot_reaction_violin returns a figure."""
+    from cellmetpro.visualization import plot_reaction_violin
+
+    fig = plot_reaction_violin(reaction_scores, groups, n_top=5)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_plot_reaction_violin_specific_reactions(reaction_scores, groups):
+    """Test violin plot with specific reactions."""
+    from cellmetpro.visualization import plot_reaction_violin
+
+    fig = plot_reaction_violin(
+        reaction_scores, groups, reactions=["R0", "R1", "R2"]
+    )
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_plot_reaction_violin_horizontal(reaction_scores, groups):
+    """Test horizontal violin plot."""
+    from cellmetpro.visualization import plot_reaction_violin
+
+    fig = plot_reaction_violin(
+        reaction_scores, groups, n_top=3, orient="h"
+    )
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_plot_reaction_boxplot_returns_figure(reaction_scores, groups):
+    """Test that plot_reaction_boxplot returns a figure."""
+    from cellmetpro.visualization import plot_reaction_boxplot
+
+    fig = plot_reaction_boxplot(reaction_scores, groups, n_top=5)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_plot_single_reaction_violin(reaction_scores, groups):
+    """Test single reaction violin plot."""
+    from cellmetpro.visualization import plot_single_reaction_violin
+
+    ax = plot_single_reaction_violin(reaction_scores, groups, "R0")
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_single_reaction_violin_with_points(reaction_scores, groups):
+    """Test single reaction violin with overlaid points."""
+    from cellmetpro.visualization import plot_single_reaction_violin
+
+    ax = plot_single_reaction_violin(
+        reaction_scores, groups, "R0", show_points=True
+    )
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_multi_reaction_stripplot(reaction_scores, groups):
+    """Test multi-reaction strip plot."""
+    from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+    fig = plot_multi_reaction_stripplot(
+        reaction_scores, groups, reactions=["R0", "R1", "R2"]
+    )
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_violin_save(reaction_scores, groups, tmp_path):
+    """Test violin plot save functionality."""
+    from cellmetpro.visualization import plot_reaction_violin
+
+    save_path = tmp_path / "violin.png"
+    plot_reaction_violin(reaction_scores, groups, n_top=3, save=str(save_path))
+
+    assert save_path.exists()
+    plt.close()
+
+
+# =============================================================================
+# TESTS FOR CORRELATION HEATMAP
+# =============================================================================
+
+
+def test_plot_correlation_heatmap_returns_figure(reaction_scores):
+    """Test that plot_correlation_heatmap returns a figure."""
+    from cellmetpro.visualization import plot_correlation_heatmap
+
+    fig = plot_correlation_heatmap(reaction_scores, n_top=10)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_plot_correlation_heatmap_specific_features(reaction_scores):
+    """Test correlation heatmap with specific features."""
+    from cellmetpro.visualization import plot_correlation_heatmap
+
+    fig = plot_correlation_heatmap(
+        reaction_scores, features=["R0", "R1", "R2", "R3", "R4"]
+    )
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_plot_correlation_heatmap_spearman(reaction_scores):
+    """Test correlation heatmap with Spearman method."""
+    from cellmetpro.visualization import plot_correlation_heatmap
+
+    fig = plot_correlation_heatmap(reaction_scores, method="spearman", n_top=10)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_plot_correlation_heatmap_no_cluster(reaction_scores):
+    """Test correlation heatmap without clustering."""
+    from cellmetpro.visualization import plot_correlation_heatmap
+
+    fig = plot_correlation_heatmap(reaction_scores, cluster=False, n_top=10)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close()
+
+
+def test_correlation_heatmap_save(reaction_scores, tmp_path):
+    """Test correlation heatmap save functionality."""
+    from cellmetpro.visualization import plot_correlation_heatmap
+
+    save_path = tmp_path / "correlation.png"
+    plot_correlation_heatmap(reaction_scores, n_top=10, save=str(save_path))
+
+    assert save_path.exists()
+    plt.close()

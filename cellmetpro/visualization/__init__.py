@@ -25,6 +25,12 @@ from .umap import (
     plot_metabolic_umap,
     plot_pca_variance,
 )
+from .violin import (
+    plot_multi_reaction_stripplot,
+    plot_reaction_boxplot,
+    plot_reaction_violin,
+    plot_single_reaction_violin,
+)
 from .volcano import (
     plot_ma,
     plot_volcano,
@@ -45,6 +51,11 @@ __all__ = [
     # Dot plots
     "plot_reaction_dotplot",
     "plot_enrichment_dotplot",
+    # Violin/Box plots
+    "plot_reaction_violin",
+    "plot_reaction_boxplot",
+    "plot_single_reaction_violin",
+    "plot_multi_reaction_stripplot",
     # Volcano plots
     "plot_volcano",
     "plot_ma",

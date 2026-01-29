@@ -791,6 +791,165 @@ class TestCompassScorerEdgeCases:
 
 
 # ============================================================================
+# COMPASS Performance and Optimization Tests
+# ============================================================================
+
+
+class TestCompassOptimizations:
+    """Tests for COMPASS performance optimizations."""
+
+    def test_parsed_gpr_basic(self):
+        """Test ParsedGPR correctly parses simple rules."""
+        from cellmetpro.core.compass import ParsedGPR
+
+        # Test single gene
+        gpr = ParsedGPR("GENE1")
+        assert gpr.genes == ["GENE1"]
+        assert gpr.tree == "GENE1"
+
+        # Test AND rule
+        gpr = ParsedGPR("GENE1 and GENE2")
+        assert set(gpr.genes) == {"GENE1", "GENE2"}
+        assert gpr.tree[0] == "AND"
+
+        # Test OR rule
+        gpr = ParsedGPR("GENE1 or GENE2")
+        assert set(gpr.genes) == {"GENE1", "GENE2"}
+        assert gpr.tree[0] == "OR"
+
+    def test_parsed_gpr_nested(self):
+        """Test ParsedGPR handles nested rules."""
+        from cellmetpro.core.compass import ParsedGPR
+
+        gpr = ParsedGPR("GENE1 and (GENE2 or GENE3)")
+        assert set(gpr.genes) == {"GENE1", "GENE2", "GENE3"}
+        assert gpr.tree[0] == "AND"
+
+    def test_parsed_gpr_evaluation(self):
+        """Test ParsedGPR vectorized evaluation."""
+        from cellmetpro.core.compass import ParsedGPR
+
+        # Create expression matrix (3 genes x 4 cells)
+        expr = np.array([
+            [1.0, 2.0, 3.0, 4.0],  # GENE1
+            [5.0, 6.0, 7.0, 8.0],  # GENE2
+            [9.0, 10.0, 11.0, 12.0],  # GENE3
+        ])
+        gene_to_idx = {"GENE1": 0, "GENE2": 1, "GENE3": 2}
+
+        # Test single gene
+        gpr = ParsedGPR("GENE1")
+        result = gpr.evaluate(expr, gene_to_idx, np.min, np.max)
+        np.testing.assert_array_equal(result, [1.0, 2.0, 3.0, 4.0])
+
+        # Test AND (min)
+        gpr = ParsedGPR("GENE1 and GENE2")
+        result = gpr.evaluate(expr, gene_to_idx, np.min, np.max)
+        np.testing.assert_array_equal(result, [1.0, 2.0, 3.0, 4.0])  # min of each col
+
+        # Test OR (max)
+        gpr = ParsedGPR("GENE1 or GENE2")
+        result = gpr.evaluate(expr, gene_to_idx, np.min, np.max)
+        np.testing.assert_array_equal(result, [5.0, 6.0, 7.0, 8.0])  # max of each col
+
+    def test_compass_config_defaults(self):
+        """Test new CompassConfig options have correct defaults."""
+        from cellmetpro.core.compass import CompassConfig
+
+        config = CompassConfig()
+        assert config.batch_size == 100
+        assert config.cache_max_fluxes is True
+        assert config.precompute_gpr is True
+
+    def test_compass_precomputed_gpr(self, simple_model, expression_df):
+        """Test COMPASS with precomputed GPR rules."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(precompute_gpr=True)
+        scorer = CompassScorer(simple_model, expression_df, config)
+
+        # Should have pre-parsed GPRs
+        assert len(scorer._parsed_gprs) > 0
+
+        # Compute penalties should work
+        penalties = scorer.compute_reaction_penalties()
+        assert not penalties.empty
+
+    def test_compass_cached_max_fluxes(self, simple_model, expression_df):
+        """Test COMPASS caches max fluxes correctly."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(cache_max_fluxes=True)
+        scorer = CompassScorer(simple_model, expression_df, config)
+
+        # Run penalty computation
+        penalties = scorer.compute_reaction_penalties()
+
+        # Pre-compute max fluxes
+        model = simple_model.copy()
+        internal_reactions = [
+            rxn.id for rxn in model.reactions
+            if rxn.id in penalties.index and not rxn.boundary
+        ]
+        scorer._precompute_max_fluxes(model, internal_reactions)
+
+        # Max flux cache should be populated
+        assert len(scorer._max_flux_cache) > 0
+
+    def test_compass_batch_processing(self, simple_model):
+        """Test COMPASS batch processing for larger datasets."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        # Create larger expression data (20 cells)
+        np.random.seed(42)
+        genes = ["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"]
+        cells = [f"cell{i}" for i in range(20)]
+        expr_df = pd.DataFrame(
+            np.random.rand(5, 20) * 100,
+            index=genes,
+            columns=cells,
+        )
+
+        config = CompassConfig(batch_size=5)  # Small batches
+        scorer = CompassScorer(simple_model, expr_df, config)
+
+        penalties = scorer.compute_reaction_penalties()
+        assert penalties.shape[1] == 20  # All cells processed
+
+    def test_expression_to_penalty_optimized(self, simple_model, expression_df):
+        """Test optimized penalty computation produces valid results."""
+        from cellmetpro.core.compass import CompassScorer
+
+        scorer = CompassScorer(simple_model, expression_df)
+        penalties = scorer.compute_reaction_penalties()
+
+        # Penalties should be in [0, 1] range
+        assert penalties.min().min() >= 0
+        assert penalties.max().max() <= 1
+
+        # Should have no NaN or inf
+        assert not penalties.isna().any().any()
+        assert not np.any(np.isinf(penalties.values))
+
+    def test_compass_optimizations_consistency(self, simple_model, expression_df):
+        """Test that optimized and non-optimized produce similar results."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        # With optimizations
+        config_opt = CompassConfig(precompute_gpr=True, cache_max_fluxes=True)
+        scorer_opt = CompassScorer(simple_model, expression_df, config_opt)
+        penalties_opt = scorer_opt.compute_reaction_penalties()
+
+        # Without optimizations
+        config_basic = CompassConfig(precompute_gpr=False, cache_max_fluxes=False)
+        scorer_basic = CompassScorer(simple_model, expression_df, config_basic)
+        penalties_basic = scorer_basic.compute_reaction_penalties()
+
+        # Results should be identical
+        pd.testing.assert_frame_equal(penalties_opt, penalties_basic)
+
+
+# ============================================================================
 # Edge Case Tests - FluxBalanceAnalyzer
 # ============================================================================
 

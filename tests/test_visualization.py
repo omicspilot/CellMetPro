@@ -495,3 +495,321 @@ def test_correlation_heatmap_save(reaction_scores, tmp_path):
 
     assert save_path.exists()
     plt.close()
+
+
+# =============================================================================
+# TESTS FOR ADVANCED VISUALIZATIONS
+# =============================================================================
+
+
+@pytest.fixture
+def subsystem_mapping():
+    """Create mock subsystem mapping."""
+    return {
+        "Glycolysis": ["R0", "R1", "R2", "R3"],
+        "TCA Cycle": ["R4", "R5", "R6"],
+        "Oxidative Phosphorylation": ["R7", "R8", "R9", "R10"],
+        "Pentose Phosphate": ["R11", "R12", "R13"],
+        "Fatty Acid Synthesis": ["R14", "R15", "R16", "R17", "R18", "R19"],
+    }
+
+
+def test_plot_stacked_bar_returns_axes(reaction_scores, groups, subsystem_mapping):
+    """Test that plot_stacked_bar returns matplotlib axes."""
+    from cellmetpro.visualization import plot_stacked_bar
+
+    ax = plot_stacked_bar(reaction_scores, groups, subsystem_mapping)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_stacked_bar_not_normalized(reaction_scores, groups, subsystem_mapping):
+    """Test stacked bar chart without normalization."""
+    from cellmetpro.visualization import plot_stacked_bar
+
+    ax = plot_stacked_bar(
+        reaction_scores, groups, subsystem_mapping, normalize=False
+    )
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_stacked_bar_custom_n_top(reaction_scores, groups, subsystem_mapping):
+    """Test stacked bar chart with custom n_top subsystems."""
+    from cellmetpro.visualization import plot_stacked_bar
+
+    ax = plot_stacked_bar(
+        reaction_scores, groups, subsystem_mapping, n_top_subsystems=3
+    )
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_ridge_returns_figure(reaction_scores, groups):
+    """Test that plot_ridge returns a figure."""
+    from cellmetpro.visualization import plot_ridge
+
+    fig = plot_ridge(reaction_scores, groups, n_top=5)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close("all")
+
+
+def test_plot_ridge_specific_reactions(reaction_scores, groups):
+    """Test ridge plot with specific reactions."""
+    from cellmetpro.visualization import plot_ridge
+
+    fig = plot_ridge(reaction_scores, groups, reactions=["R0", "R1", "R2"])
+
+    assert isinstance(fig, plt.Figure)
+    plt.close("all")
+
+
+def test_plot_ridge_custom_overlap(reaction_scores, groups):
+    """Test ridge plot with custom overlap."""
+    from cellmetpro.visualization import plot_ridge
+
+    fig = plot_ridge(reaction_scores, groups, n_top=3, overlap=0.3)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close("all")
+
+
+def test_plot_radar_returns_axes(reaction_scores, groups):
+    """Test that plot_radar returns polar axes."""
+    from cellmetpro.visualization import plot_radar
+
+    ax = plot_radar(reaction_scores, groups, n_top=5)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_radar_specific_reactions(reaction_scores, groups):
+    """Test radar plot with specific reactions."""
+    from cellmetpro.visualization import plot_radar
+
+    ax = plot_radar(
+        reaction_scores, groups, reactions=["R0", "R1", "R2", "R3", "R4"]
+    )
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_radar_median_aggregation(reaction_scores, groups):
+    """Test radar plot with median aggregation."""
+    from cellmetpro.visualization import plot_radar
+
+    ax = plot_radar(reaction_scores, groups, n_top=5, agg_method="median")
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_radar_not_normalized(reaction_scores, groups):
+    """Test radar plot without normalization."""
+    from cellmetpro.visualization import plot_radar
+
+    ax = plot_radar(reaction_scores, groups, n_top=5, normalize=False)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_radar_minimum_reactions():
+    """Test radar plot requires at least 3 reactions."""
+    from cellmetpro.visualization import plot_radar
+
+    # Create minimal data
+    reactions = ["R0", "R1"]  # Only 2 reactions
+    cells = [f"cell_{i}" for i in range(10)]
+    data = np.random.rand(2, 10)
+    scores = pd.DataFrame(data, index=reactions, columns=cells)
+    groups = pd.Series(["A"] * 5 + ["B"] * 5, index=cells)
+
+    with pytest.raises(ValueError, match="at least 3"):
+        plot_radar(scores, groups, reactions=reactions)
+    plt.close()
+
+
+def test_plot_waterfall_returns_axes(differential_results):
+    """Test that plot_waterfall returns matplotlib axes."""
+    from cellmetpro.visualization import plot_waterfall
+
+    ax = plot_waterfall(differential_results)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_waterfall_custom_n_top(differential_results):
+    """Test waterfall plot with custom n_top."""
+    from cellmetpro.visualization import plot_waterfall
+
+    ax = plot_waterfall(differential_results, n_top=15)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_waterfall_no_labels(differential_results):
+    """Test waterfall plot without labels."""
+    from cellmetpro.visualization import plot_waterfall
+
+    ax = plot_waterfall(differential_results, show_labels=False)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_waterfall_custom_colors(differential_results):
+    """Test waterfall plot with custom colors."""
+    from cellmetpro.visualization import plot_waterfall
+
+    ax = plot_waterfall(
+        differential_results,
+        up_color="#FF0000",
+        down_color="#0000FF",
+        ns_color="#CCCCCC"
+    )
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_subsystem_waterfall_returns_axes(enrichment_results):
+    """Test that plot_subsystem_waterfall returns matplotlib axes."""
+    from cellmetpro.visualization import plot_subsystem_waterfall
+
+    # Add pathway column expected by the function
+    enrichment_results["pathway"] = enrichment_results["go_name"]
+
+    ax = plot_subsystem_waterfall(enrichment_results)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_subsystem_waterfall_custom_columns(enrichment_results):
+    """Test subsystem waterfall with custom columns."""
+    from cellmetpro.visualization import plot_subsystem_waterfall
+
+    ax = plot_subsystem_waterfall(
+        enrichment_results,
+        fold_col="fold_enrichment",
+        term_col="go_name",
+        pvalue_col="padj"
+    )
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_subsystem_waterfall_custom_n_top(enrichment_results):
+    """Test subsystem waterfall with custom n_top."""
+    from cellmetpro.visualization import plot_subsystem_waterfall
+
+    enrichment_results["pathway"] = enrichment_results["go_name"]
+
+    ax = plot_subsystem_waterfall(enrichment_results, n_top=5)
+
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_stacked_bar_save(reaction_scores, groups, subsystem_mapping, tmp_path):
+    """Test stacked bar save functionality."""
+    from cellmetpro.visualization import plot_stacked_bar
+
+    save_path = tmp_path / "stacked_bar.png"
+    plot_stacked_bar(
+        reaction_scores, groups, subsystem_mapping, save=str(save_path)
+    )
+
+    assert save_path.exists()
+    plt.close()
+
+
+def test_radar_save(reaction_scores, groups, tmp_path):
+    """Test radar plot save functionality."""
+    from cellmetpro.visualization import plot_radar
+
+    save_path = tmp_path / "radar.png"
+    plot_radar(reaction_scores, groups, n_top=5, save=str(save_path))
+
+    assert save_path.exists()
+    plt.close()
+
+
+def test_waterfall_save(differential_results, tmp_path):
+    """Test waterfall plot save functionality."""
+    from cellmetpro.visualization import plot_waterfall
+
+    save_path = tmp_path / "waterfall.png"
+    plot_waterfall(differential_results, save=str(save_path))
+
+    assert save_path.exists()
+    plt.close()
+
+
+# =============================================================================
+# TESTS FOR EDGE CASES IN ADVANCED VISUALIZATIONS
+# =============================================================================
+
+
+def test_plot_waterfall_empty_input():
+    """Test waterfall plot with empty input raises error."""
+    from cellmetpro.visualization import plot_waterfall
+
+    empty_df = pd.DataFrame(columns=["reaction", "log2fc", "padj_bh"])
+
+    with pytest.raises(ValueError, match="empty"):
+        plot_waterfall(empty_df)
+    plt.close()
+
+
+def test_plot_subsystem_waterfall_empty_input():
+    """Test subsystem waterfall with empty input raises error."""
+    from cellmetpro.visualization import plot_subsystem_waterfall
+
+    empty_df = pd.DataFrame(columns=["pathway", "fold_enrichment", "padj"])
+
+    with pytest.raises(ValueError, match="empty"):
+        plot_subsystem_waterfall(empty_df)
+    plt.close()
+
+
+def test_plot_stacked_bar_zero_values(groups, subsystem_mapping):
+    """Test stacked bar handles all-zero values gracefully."""
+    from cellmetpro.visualization import plot_stacked_bar
+
+    # Create reaction scores with all zeros for some groups
+    cells = [f"cell_{i}" for i in range(30)]
+    reactions = [f"R{i}" for i in range(20)]
+    data = np.zeros((20, 30))  # All zeros
+    scores = pd.DataFrame(data, index=reactions, columns=cells)
+
+    # Should not raise division by zero
+    ax = plot_stacked_bar(scores, groups, subsystem_mapping)
+    assert isinstance(ax, plt.Axes)
+    plt.close()
+
+
+def test_plot_radar_constant_reactions(reaction_scores, groups):
+    """Test radar plot handles constant (no variance) reactions."""
+    from cellmetpro.visualization import plot_radar
+
+    # Create reactions with constant values
+    cells = [f"cell_{i}" for i in range(30)]
+    reactions = ["R0", "R1", "R2", "R3", "R4"]
+    data = np.ones((5, 30))  # All ones - no variance
+    scores = pd.DataFrame(data, index=reactions, columns=cells)
+
+    # Should not raise division by zero
+    ax = plot_radar(scores, groups, reactions=reactions)
+    assert isinstance(ax, plt.Axes)
+    plt.close()

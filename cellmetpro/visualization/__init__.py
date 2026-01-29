@@ -35,6 +35,13 @@ from .volcano import (
     plot_ma,
     plot_volcano,
 )
+from .advanced import (
+    plot_radar,
+    plot_ridge,
+    plot_stacked_bar,
+    plot_subsystem_waterfall,
+    plot_waterfall,
+)
 
 __all__ = [
     # Embedding plots
@@ -59,4 +66,10 @@ __all__ = [
     # Volcano plots
     "plot_volcano",
     "plot_ma",
+    # Advanced plots
+    "plot_stacked_bar",
+    "plot_ridge",
+    "plot_radar",
+    "plot_waterfall",
+    "plot_subsystem_waterfall",
 ]

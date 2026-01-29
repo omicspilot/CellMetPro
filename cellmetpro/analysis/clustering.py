@@ -11,7 +11,13 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
-from sklearn.cluster import KMeans
+from sklearn.cluster import (
+    DBSCAN,
+    AgglomerativeClustering,
+    KMeans,
+    MiniBatchKMeans,
+    SpectralClustering,
+)
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.neighbors import NearestNeighbors
@@ -222,17 +228,31 @@ class MetabolicClustering:
 
     def cluster(
         self,
-        method: Literal["leiden", "kmeans", "louvain"] = "leiden",
+        method: Literal[
+            "leiden", "kmeans", "louvain", "hierarchical",
+            "spectral", "dbscan", "minibatch_kmeans", "hdbscan"
+        ] = "leiden",
         resolution: float = 1.0,
         n_neighbors: int = 15,
         use_pca: bool = True,
+        linkage: Literal["ward", "complete", "average", "single"] = "ward",
+        eps: float | None = None,
+        min_samples: int = 5,
     ) -> np.ndarray:
         """Perform clustering on metabolic profiles.
 
         Parameters
         ----------
         method : str
-            Clustering method: 'leiden', 'kmeans', or 'louvain'.
+            Clustering method:
+            - 'leiden': Graph-based community detection (default)
+            - 'louvain': Modularity-based community detection
+            - 'kmeans': K-means clustering
+            - 'minibatch_kmeans': Memory-efficient K-means for large datasets
+            - 'hierarchical': Agglomerative hierarchical clustering
+            - 'spectral': Spectral clustering using graph Laplacian
+            - 'dbscan': Density-based clustering (auto-detects n_clusters)
+            - 'hdbscan': Hierarchical DBSCAN (requires hdbscan package)
         resolution : float
             Resolution parameter for community detection methods.
             Higher values = more clusters.
@@ -240,6 +260,14 @@ class MetabolicClustering:
             Number of neighbors for graph-based methods.
         use_pca : bool
             Whether to use PCA components as input.
+        linkage : str
+            Linkage criterion for hierarchical clustering:
+            'ward', 'complete', 'average', or 'single'.
+        eps : float, optional
+            The maximum distance between samples for DBSCAN.
+            If None, estimated from data.
+        min_samples : int
+            Minimum samples in a neighborhood for DBSCAN core points.
 
         Returns
         -------
@@ -254,8 +282,18 @@ class MetabolicClustering:
 
         if method == "kmeans":
             self.labels = self._cluster_kmeans(data)
+        elif method == "minibatch_kmeans":
+            self.labels = self._cluster_minibatch_kmeans(data)
         elif method in ("leiden", "louvain"):
             self.labels = self._cluster_graph(data, method, resolution, n_neighbors)
+        elif method == "hierarchical":
+            self.labels = self._cluster_hierarchical(data, linkage)
+        elif method == "spectral":
+            self.labels = self._cluster_spectral(data, n_neighbors)
+        elif method == "dbscan":
+            self.labels = self._cluster_dbscan(data, eps, min_samples)
+        elif method == "hdbscan":
+            self.labels = self._cluster_hdbscan(data, min_samples)
         else:
             raise ValueError(f"Unknown clustering method: {method}")
 
@@ -327,6 +365,124 @@ class MetabolicClustering:
             )
 
         return np.array(partition.membership)
+
+    def _cluster_minibatch_kmeans(self, data: np.ndarray) -> np.ndarray:
+        """MiniBatch K-means clustering (memory efficient for large datasets)."""
+        n_clusters = self.n_clusters
+        if n_clusters is None:
+            n_clusters = min(10, max(2, data.shape[0] // 50))
+
+        kmeans = MiniBatchKMeans(
+            n_clusters=n_clusters,
+            random_state=42,
+            batch_size=min(1024, data.shape[0]),
+            n_init=10,
+        )
+        return kmeans.fit_predict(data)
+
+    def _cluster_hierarchical(
+        self,
+        data: np.ndarray,
+        linkage: str = "ward",
+    ) -> np.ndarray:
+        """Agglomerative hierarchical clustering."""
+        n_clusters = self.n_clusters
+        if n_clusters is None:
+            n_clusters = min(10, max(2, data.shape[0] // 50))
+
+        clustering = AgglomerativeClustering(
+            n_clusters=n_clusters,
+            linkage=linkage,
+        )
+        return clustering.fit_predict(data)
+
+    def _cluster_spectral(
+        self,
+        data: np.ndarray,
+        n_neighbors: int = 15,
+    ) -> np.ndarray:
+        """Spectral clustering using graph Laplacian."""
+        n_clusters = self.n_clusters
+        if n_clusters is None:
+            n_clusters = min(10, max(2, data.shape[0] // 50))
+
+        # Cap n_neighbors for small datasets
+        n_neighbors = min(n_neighbors, data.shape[0] - 1)
+
+        clustering = SpectralClustering(
+            n_clusters=n_clusters,
+            affinity="nearest_neighbors",
+            n_neighbors=n_neighbors,
+            random_state=42,
+        )
+        return clustering.fit_predict(data)
+
+    def _cluster_dbscan(
+        self,
+        data: np.ndarray,
+        eps: float | None = None,
+        min_samples: int = 5,
+    ) -> np.ndarray:
+        """DBSCAN density-based clustering.
+
+        Automatically detects number of clusters based on density.
+        Points labeled as -1 are noise/outliers.
+        """
+        if eps is None:
+            # Estimate eps using k-nearest neighbors distances
+            k = min(min_samples, data.shape[0] - 1)
+            nn = NearestNeighbors(n_neighbors=k)
+            nn.fit(data)
+            distances, _ = nn.kneighbors(data)
+            # Use the median of k-th nearest neighbor distances
+            eps = float(np.median(distances[:, -1]) * 1.5)
+
+        clustering = DBSCAN(
+            eps=eps,
+            min_samples=min_samples,
+            metric="euclidean",
+        )
+        labels = clustering.fit_predict(data)
+
+        # Relabel noise points (-1) to a separate cluster for consistency
+        if -1 in labels:
+            max_label = labels.max()
+            labels[labels == -1] = max_label + 1
+
+        return labels
+
+    def _cluster_hdbscan(
+        self,
+        data: np.ndarray,
+        min_samples: int = 5,
+    ) -> np.ndarray:
+        """HDBSCAN hierarchical density-based clustering.
+
+        Automatically detects number of clusters and handles varying densities.
+        """
+        try:
+            import hdbscan
+        except ImportError:
+            raise ImportError(
+                "HDBSCAN clustering requires the hdbscan package. "
+                "Install with: pip install hdbscan"
+            )
+
+        min_cluster_size = max(5, data.shape[0] // 50)
+
+        clustering = hdbscan.HDBSCAN(
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            metric="euclidean",
+        )
+        labels = clustering.fit_predict(data)
+
+        # Relabel noise points (-1) to a separate cluster
+        if -1 in labels:
+            max_label = labels.max()
+            labels[labels == -1] = max_label + 1
+
+        return labels
 
     def get_cluster_markers(
         self,
@@ -495,3 +651,174 @@ def find_optimal_clusters(
         elbow_idx = int(np.argmax(diffs2)) + 2  # +2 because of two diffs
 
         return max(2, elbow_idx)
+
+
+def evaluate_clustering(
+    data: np.ndarray,
+    labels: np.ndarray,
+) -> dict[str, float]:
+    """Evaluate clustering quality using multiple metrics.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data matrix (samples x features).
+    labels : np.ndarray
+        Cluster labels for each sample.
+
+    Returns
+    -------
+    dict
+        Dictionary with metric names and scores:
+        - silhouette: Silhouette score (-1 to 1, higher is better)
+        - calinski_harabasz: Calinski-Harabasz index (higher is better)
+        - davies_bouldin: Davies-Bouldin index (lower is better)
+        - n_clusters: Number of clusters found
+
+    Example
+    -------
+    >>> mc = MetabolicClustering(reaction_scores)
+    >>> mc.compute_pca()
+    >>> labels = mc.cluster(method="leiden")
+    >>> metrics = evaluate_clustering(mc.pca_components, labels)
+    >>> print(f"Silhouette: {metrics['silhouette']:.3f}")
+    """
+    from sklearn.metrics import (
+        calinski_harabasz_score,
+        davies_bouldin_score,
+        silhouette_score,
+    )
+
+    n_clusters = len(np.unique(labels))
+    n_samples = len(labels)
+
+    # Need at least 2 clusters and more samples than clusters
+    if n_clusters < 2 or n_clusters >= n_samples:
+        return {
+            "silhouette": np.nan,
+            "calinski_harabasz": np.nan,
+            "davies_bouldin": np.nan,
+            "n_clusters": n_clusters,
+        }
+
+    return {
+        "silhouette": float(silhouette_score(data, labels)),
+        "calinski_harabasz": float(calinski_harabasz_score(data, labels)),
+        "davies_bouldin": float(davies_bouldin_score(data, labels)),
+        "n_clusters": n_clusters,
+    }
+
+
+def compare_clusterings(
+    labels1: np.ndarray,
+    labels2: np.ndarray,
+) -> dict[str, float]:
+    """Compare two clustering solutions using multiple metrics.
+
+    Useful for comparing results from different algorithms or parameter settings.
+
+    Parameters
+    ----------
+    labels1 : np.ndarray
+        First set of cluster labels.
+    labels2 : np.ndarray
+        Second set of cluster labels.
+
+    Returns
+    -------
+    dict
+        Dictionary with comparison metrics:
+        - adjusted_rand: Adjusted Rand Index (-1 to 1, 1 = identical)
+        - normalized_mutual_info: Normalized MI (0 to 1, 1 = identical)
+        - fowlkes_mallows: Fowlkes-Mallows index (0 to 1, 1 = identical)
+        - adjusted_mutual_info: Adjusted MI (0 to 1, 1 = identical)
+
+    Example
+    -------
+    >>> labels_leiden = mc.cluster(method="leiden")
+    >>> labels_kmeans = mc.cluster(method="kmeans")
+    >>> comparison = compare_clusterings(labels_leiden, labels_kmeans)
+    >>> print(f"ARI: {comparison['adjusted_rand']:.3f}")
+    """
+    from sklearn.metrics import (
+        adjusted_mutual_info_score,
+        adjusted_rand_score,
+        fowlkes_mallows_score,
+        normalized_mutual_info_score,
+    )
+
+    if len(labels1) != len(labels2):
+        raise ValueError(
+            f"Label arrays must have same length: {len(labels1)} vs {len(labels2)}"
+        )
+
+    return {
+        "adjusted_rand": float(adjusted_rand_score(labels1, labels2)),
+        "normalized_mutual_info": float(
+            normalized_mutual_info_score(labels1, labels2)
+        ),
+        "fowlkes_mallows": float(fowlkes_mallows_score(labels1, labels2)),
+        "adjusted_mutual_info": float(adjusted_mutual_info_score(labels1, labels2)),
+    }
+
+
+def benchmark_clustering_methods(
+    data: np.ndarray,
+    methods: list[str] | None = None,
+    n_clusters: int | None = None,
+) -> pd.DataFrame:
+    """Benchmark multiple clustering methods on the same data.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data matrix (samples x features).
+    methods : list of str, optional
+        Clustering methods to benchmark. Defaults to
+        ['kmeans', 'hierarchical', 'spectral'].
+    n_clusters : int, optional
+        Number of clusters. If None, uses auto-estimation.
+
+    Returns
+    -------
+    pd.DataFrame
+        Results with columns: method, silhouette, calinski_harabasz,
+        davies_bouldin, n_clusters.
+
+    Example
+    -------
+    >>> mc = MetabolicClustering(reaction_scores)
+    >>> mc.compute_pca()
+    >>> results = benchmark_clustering_methods(mc.pca_components, n_clusters=5)
+    >>> print(results.sort_values("silhouette", ascending=False))
+    """
+    if methods is None:
+        methods = ["kmeans", "hierarchical", "spectral"]
+
+    results = []
+
+    for method in methods:
+        try:
+            # Create temporary clustering object with the data transposed back
+            # We need a DataFrame, so create a dummy one
+            dummy_df = pd.DataFrame(data.T)
+            mc = MetabolicClustering(dummy_df, n_clusters=n_clusters)
+            mc._data = data  # Set the data directly
+            mc.pca_components = data  # Use data as PCA components
+
+            labels = mc.cluster(method=method, use_pca=True)
+            metrics = evaluate_clustering(data, labels)
+            metrics["method"] = method
+            results.append(metrics)
+        except (ImportError, ValueError) as e:
+            # Skip methods with missing dependencies or errors
+            results.append({
+                "method": method,
+                "silhouette": np.nan,
+                "calinski_harabasz": np.nan,
+                "davies_bouldin": np.nan,
+                "n_clusters": 0,
+                "error": str(e),
+            })
+
+    return pd.DataFrame(results)

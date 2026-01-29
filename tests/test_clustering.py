@@ -6,6 +6,9 @@ import pytest
 
 from cellmetpro.analysis.clustering import (
     MetabolicClustering,
+    benchmark_clustering_methods,
+    compare_clusterings,
+    evaluate_clustering,
     find_optimal_clusters,
 )
 
@@ -284,3 +287,190 @@ def test_single_reaction():
     pca_result = mc.compute_pca()
 
     assert pca_result.shape[0] == 5  # 5 cells
+
+
+# =============================================================================
+# TESTS FOR NEW CLUSTERING ALGORITHMS
+# =============================================================================
+
+
+def test_cluster_hierarchical(reaction_scores):
+    """Test hierarchical clustering."""
+    mc = MetabolicClustering(reaction_scores, n_clusters=3)
+    mc.compute_pca(n_components=10)
+    labels = mc.cluster(method="hierarchical")
+
+    assert isinstance(labels, np.ndarray)
+    assert len(labels) == 30
+    assert len(np.unique(labels)) == 3
+
+
+def test_cluster_hierarchical_linkages(reaction_scores):
+    """Test hierarchical clustering with different linkages."""
+    mc = MetabolicClustering(reaction_scores, n_clusters=3)
+    mc.compute_pca(n_components=10)
+
+    for linkage in ["ward", "complete", "average", "single"]:
+        labels = mc.cluster(method="hierarchical", linkage=linkage)
+        assert len(np.unique(labels)) == 3
+
+
+def test_cluster_spectral(reaction_scores):
+    """Test spectral clustering."""
+    mc = MetabolicClustering(reaction_scores, n_clusters=3)
+    mc.compute_pca(n_components=10)
+    labels = mc.cluster(method="spectral")
+
+    assert isinstance(labels, np.ndarray)
+    assert len(labels) == 30
+    assert len(np.unique(labels)) == 3
+
+
+def test_cluster_minibatch_kmeans(reaction_scores):
+    """Test MiniBatch K-means clustering."""
+    mc = MetabolicClustering(reaction_scores, n_clusters=3)
+    mc.compute_pca(n_components=10)
+    labels = mc.cluster(method="minibatch_kmeans")
+
+    assert isinstance(labels, np.ndarray)
+    assert len(labels) == 30
+    assert len(np.unique(labels)) == 3
+
+
+def test_cluster_dbscan(reaction_scores):
+    """Test DBSCAN clustering."""
+    mc = MetabolicClustering(reaction_scores)
+    mc.compute_pca(n_components=10)
+    labels = mc.cluster(method="dbscan", min_samples=3)
+
+    assert isinstance(labels, np.ndarray)
+    assert len(labels) == 30
+    # DBSCAN auto-detects clusters, so we just check it runs
+
+
+def test_cluster_dbscan_with_custom_eps(reaction_scores):
+    """Test DBSCAN with custom eps parameter."""
+    mc = MetabolicClustering(reaction_scores)
+    mc.compute_pca(n_components=10)
+    labels = mc.cluster(method="dbscan", eps=1.0, min_samples=3)
+
+    assert isinstance(labels, np.ndarray)
+    assert len(labels) == 30
+
+
+# =============================================================================
+# TESTS FOR CLUSTERING EVALUATION
+# =============================================================================
+
+
+def test_evaluate_clustering(reaction_scores):
+    """Test clustering evaluation metrics."""
+    mc = MetabolicClustering(reaction_scores, n_clusters=3)
+    pca_data = mc.compute_pca(n_components=10)
+    labels = mc.cluster(method="kmeans")
+
+    metrics = evaluate_clustering(pca_data, labels)
+
+    assert isinstance(metrics, dict)
+    assert "silhouette" in metrics
+    assert "calinski_harabasz" in metrics
+    assert "davies_bouldin" in metrics
+    assert "n_clusters" in metrics
+
+    # Silhouette should be between -1 and 1
+    assert -1 <= metrics["silhouette"] <= 1
+    # Calinski-Harabasz should be positive
+    assert metrics["calinski_harabasz"] > 0
+    # Davies-Bouldin should be positive (lower is better)
+    assert metrics["davies_bouldin"] > 0
+
+
+def test_evaluate_clustering_single_cluster():
+    """Test evaluation with single cluster returns NaN."""
+    data = np.random.rand(10, 5)
+    labels = np.zeros(10)  # All same cluster
+
+    metrics = evaluate_clustering(data, labels)
+
+    assert np.isnan(metrics["silhouette"])
+    assert metrics["n_clusters"] == 1
+
+
+# =============================================================================
+# TESTS FOR CLUSTERING COMPARISON
+# =============================================================================
+
+
+def test_compare_clusterings(reaction_scores):
+    """Test clustering comparison metrics."""
+    mc = MetabolicClustering(reaction_scores, n_clusters=3)
+    mc.compute_pca(n_components=10)
+
+    labels_kmeans = mc.cluster(method="kmeans")
+    labels_hierarchical = mc.cluster(method="hierarchical")
+
+    comparison = compare_clusterings(labels_kmeans, labels_hierarchical)
+
+    assert isinstance(comparison, dict)
+    assert "adjusted_rand" in comparison
+    assert "normalized_mutual_info" in comparison
+    assert "fowlkes_mallows" in comparison
+    assert "adjusted_mutual_info" in comparison
+
+    # All metrics should be between 0 and 1 (or -1 to 1 for ARI)
+    assert -1 <= comparison["adjusted_rand"] <= 1
+    assert 0 <= comparison["normalized_mutual_info"] <= 1
+    assert 0 <= comparison["fowlkes_mallows"] <= 1
+
+
+def test_compare_clusterings_identical():
+    """Test comparison of identical clusterings."""
+    labels = np.array([0, 0, 1, 1, 2, 2])
+
+    comparison = compare_clusterings(labels, labels.copy())
+
+    # Should be perfect match
+    assert comparison["adjusted_rand"] == pytest.approx(1.0)
+    assert comparison["normalized_mutual_info"] == pytest.approx(1.0)
+
+
+def test_compare_clusterings_different_lengths():
+    """Test comparison with mismatched lengths raises error."""
+    labels1 = np.array([0, 1, 2])
+    labels2 = np.array([0, 1, 2, 3])
+
+    with pytest.raises(ValueError, match="same length"):
+        compare_clusterings(labels1, labels2)
+
+
+# =============================================================================
+# TESTS FOR BENCHMARK FUNCTION
+# =============================================================================
+
+
+def test_benchmark_clustering_methods(reaction_scores):
+    """Test clustering method benchmarking."""
+    mc = MetabolicClustering(reaction_scores)
+    pca_data = mc.compute_pca(n_components=10)
+
+    results = benchmark_clustering_methods(
+        pca_data,
+        methods=["kmeans", "hierarchical"],
+        n_clusters=3,
+    )
+
+    assert isinstance(results, pd.DataFrame)
+    assert "method" in results.columns
+    assert "silhouette" in results.columns
+    assert len(results) == 2  # Two methods
+
+
+def test_benchmark_with_default_methods(reaction_scores):
+    """Test benchmark with default methods."""
+    mc = MetabolicClustering(reaction_scores)
+    pca_data = mc.compute_pca(n_components=10)
+
+    results = benchmark_clustering_methods(pca_data, n_clusters=3)
+
+    # Default methods: kmeans, hierarchical, spectral
+    assert len(results) == 3

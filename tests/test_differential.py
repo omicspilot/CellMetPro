@@ -3,7 +3,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import stats
 
 from cellmetpro.analysis.differential import DifferentialAnalysis
 
@@ -89,7 +88,7 @@ def test_compare_groups_invalid_method(reaction_scores, group_labels):
     """Test that invalid method raises AssertionError."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         da.compare_groups("A", "B", method="invalid_method")
 
 
@@ -498,7 +497,7 @@ def test_compare_multiple_groups_invalid_method(multi_group_reaction_scores, mul
     """Test that invalid method raises error."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         da.compare_multiple_groups(method="invalid")
 
 
@@ -577,7 +576,7 @@ def test_posthoc_invalid_method(multi_group_reaction_scores, multi_group_labels)
     """Test error when invalid method specified."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         da.posthoc_tests("R1", method="invalid")
 
 

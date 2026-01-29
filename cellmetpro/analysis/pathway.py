@@ -95,7 +95,9 @@ class PathwayAnalyzer:
         results = {}
         for pathway, reactions in self.pathway_mapping.items():
             # Get reactions that exist in our scores
-            available_reactions = [r for r in reactions if r in self.reaction_scores.index]
+            available_reactions = [
+                r for r in reactions if r in self.reaction_scores.index
+            ]
             if available_reactions:
                 pathway_data = self.reaction_scores.loc[available_reactions]
                 results[pathway] = agg_func(pathway_data.values, axis=0)
@@ -325,12 +327,14 @@ class GOEnrichmentAnalyzer:
         significant_reactions : set
             Set of significant reaction IDs.
         background_reactions : set, optional
-            Background reaction set. If None, uses all model reactions with GO annotations.
+            Background reaction set. If None, uses all model reactions
+            with GO annotations.
         min_genes : int
             Minimum number of reactions in a GO term to consider.
         namespace : str, optional
-            Filter by GO namespace: 'BP' (biological process), 'MF' (molecular function),
-            'CC' (cellular component). If None, include all.
+            Filter by GO namespace: 'BP' (biological process),
+            'MF' (molecular function), 'CC' (cellular component).
+            If None, include all.
 
         Returns
         -------
@@ -349,16 +353,19 @@ class GOEnrichmentAnalyzer:
 
         # Filter by namespace if specified
         if namespace:
-            namespace_terms = set(
-                self.go_annotations[self.go_annotations["namespace"] == namespace]["go_term"]
-            )
+            filtered = self.go_annotations[
+                self.go_annotations["namespace"] == namespace
+            ]
+            namespace_terms = set(filtered["go_term"])
             go_to_reactions = {
                 go: rxns for go, rxns in go_to_reactions.items()
                 if go in namespace_terms
             }
 
         # Build GO term metadata
-        go_metadata = self.go_annotations.drop_duplicates(subset=["go_term"]).set_index("go_term")
+        go_metadata = self.go_annotations.drop_duplicates(
+            subset=["go_term"]
+        ).set_index("go_term")
 
         results = []
         for go_term, go_reactions in go_to_reactions.items():
@@ -383,12 +390,19 @@ class GOEnrichmentAnalyzer:
             _, pval = stats.fisher_exact([[a, b], [c, d]], alternative="greater")
 
             # Fold enrichment
-            expected = len(significant_reactions) * len(go_reactions) / len(background_reactions)
+            n_sig = len(significant_reactions)
+            n_go = len(go_reactions)
+            n_bg = len(background_reactions)
+            expected = n_sig * n_go / n_bg
             fold_enrichment = a / expected if expected > 0 else 0
 
             # Get GO term name if available
-            go_name = go_metadata.loc[go_term, "go_name"] if go_term in go_metadata.index else ""
-            go_namespace = go_metadata.loc[go_term, "namespace"] if go_term in go_metadata.index else ""
+            if go_term in go_metadata.index:
+                go_name = go_metadata.loc[go_term, "go_name"]
+                go_namespace = go_metadata.loc[go_term, "namespace"]
+            else:
+                go_name = ""
+                go_namespace = ""
 
             results.append({
                 "go_term": go_term,
@@ -437,11 +451,11 @@ class GOEnrichmentAnalyzer:
         pd.DataFrame
             GO enrichment results.
         """
-        pval_col = "padj_bh" if use_adjusted and "padj_bh" in differential_results.columns else "pvalue"
+        use_padj = use_adjusted and "padj_bh" in differential_results.columns
+        pval_col = "padj_bh" if use_padj else "pvalue"
 
-        significant = set(
-            differential_results[differential_results[pval_col] < pvalue_threshold]["reaction"]
-        )
+        sig_mask = differential_results[pval_col] < pvalue_threshold
+        significant = set(differential_results[sig_mask]["reaction"])
         background = set(differential_results["reaction"])
 
         return self.enrich_reactions(significant, background, **kwargs)
@@ -521,8 +535,8 @@ def create_go_annotations_from_dict(
     >>> go_df = create_go_annotations_from_dict(gene_to_go)
     """
     rows = []
-    for gene_id, annotations in gene_to_go.items():
-        for go_term, go_name, namespace in annotations:
+    for gene_id, go_terms in gene_to_go.items():
+        for go_term, go_name, namespace in go_terms:
             rows.append({
                 "gene_id": gene_id,
                 "go_term": go_term,
@@ -531,3 +545,80 @@ def create_go_annotations_from_dict(
             })
 
     return pd.DataFrame(rows)
+
+
+def subsystem_enrichment(
+    significant_reactions: list[str] | set[str],
+    background: list[str] | set[str],
+    subsystem_mapping: dict[str, list[str]],
+) -> pd.DataFrame:
+    """Perform subsystem enrichment analysis using Fisher's exact test.
+
+    This is a standalone function for enrichment analysis that doesn't
+    require reaction scores or a full model object.
+
+    Parameters
+    ----------
+    significant_reactions : list or set
+        List of significant reaction IDs.
+    background : list or set
+        List of all reaction IDs (background set).
+    subsystem_mapping : dict
+        Mapping of subsystem names to lists of reaction IDs.
+
+    Returns
+    -------
+    pd.DataFrame
+        Enrichment results with columns: pathway, n_sig_in_pathway,
+        n_pathway_total, n_sig_total, n_background, fold_enrichment,
+        pvalue, padj.
+
+    Example
+    -------
+    >>> sig_reactions = ["R1", "R2", "R3"]
+    >>> background = ["R1", "R2", "R3", "R4", "R5", "R6"]
+    >>> subsystem_map = {"Glycolysis": ["R1", "R2"], "TCA": ["R3", "R4"]}
+    >>> results = subsystem_enrichment(sig_reactions, background, subsystem_map)
+    """
+    sig_reactions = set(significant_reactions)
+    bg_reactions = set(background)
+
+    results = []
+
+    for pathway, reactions in subsystem_mapping.items():
+        pathway_reactions = set(reactions) & bg_reactions
+
+        if len(pathway_reactions) == 0:
+            continue
+
+        # Contingency table
+        a = len(sig_reactions & pathway_reactions)
+        b = len(sig_reactions - pathway_reactions)
+        c = len(pathway_reactions - sig_reactions)
+        d = len(bg_reactions - sig_reactions - pathway_reactions)
+
+        # Fisher's exact test (one-sided, greater)
+        _, pval = stats.fisher_exact([[a, b], [c, d]], alternative="greater")
+
+        # Fold enrichment
+        expected = len(sig_reactions) * len(pathway_reactions) / len(bg_reactions)
+        fold_enrichment = a / expected if expected > 0 else 0
+
+        results.append({
+            "pathway": pathway,
+            "n_sig_in_pathway": a,
+            "n_pathway_total": len(pathway_reactions),
+            "n_sig_total": len(sig_reactions),
+            "n_background": len(bg_reactions),
+            "fold_enrichment": fold_enrichment,
+            "pvalue": pval,
+        })
+
+    results_df = pd.DataFrame(results)
+
+    if len(results_df) > 0:
+        _, padj, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")
+        results_df["padj"] = padj
+        results_df = results_df.sort_values("pvalue")
+
+    return results_df.reset_index(drop=True)

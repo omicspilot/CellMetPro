@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -332,7 +331,6 @@ class TestFluxBalanceAnalyzer:
         from cellmetpro.core.fba import FluxBalanceAnalyzer
 
         fba = FluxBalanceAnalyzer(simple_model)
-        original_ub = fba.model.reactions.get_by_id("R1").upper_bound
 
         fba.set_bounds("R1", lower=0, upper=100)
 
@@ -410,7 +408,7 @@ class TestMicroclustering:
 
     def test_microcluster_small_dataset(self, expression_df):
         """Test microclustering on small dataset."""
-        from cellmetpro.core.microclustering import microcluster, MicroclusterConfig
+        from cellmetpro.core.microclustering import MicroclusterConfig, microcluster
 
         config = MicroclusterConfig(cells_per_cluster=2, method="kmeans")
         result = microcluster(expression_df, config)
@@ -423,9 +421,9 @@ class TestMicroclustering:
     def test_unpool_results(self, expression_df):
         """Test unpooling cluster results."""
         from cellmetpro.core.microclustering import (
+            MicroclusterConfig,
             microcluster,
             unpool_results,
-            MicroclusterConfig,
         )
 
         config = MicroclusterConfig(cells_per_cluster=2, method="kmeans")
@@ -557,6 +555,7 @@ class TestModelLoading:
     def test_load_model_from_file_sbml(self, simple_model, tmp_path):
         """Test loading model from SBML file."""
         import cobra
+
         from cellmetpro.models import load_model_from_file
 
         # Save model as SBML
@@ -572,6 +571,7 @@ class TestModelLoading:
     def test_load_model_from_file_json(self, simple_model, tmp_path):
         """Test loading model from JSON file."""
         import cobra
+
         from cellmetpro.models import load_model_from_file
 
         # Save model as JSON
@@ -626,7 +626,7 @@ class TestIntegration:
 
     def test_full_compass_pipeline(self, simple_model, expression_df):
         """Test full COMPASS pipeline."""
-        from cellmetpro.core.compass import run_compass, CompassConfig
+        from cellmetpro.core.compass import CompassConfig, run_compass
 
         config = CompassConfig(beta=0.95, n_processes=1)
         result = run_compass(simple_model, expression_df, config)

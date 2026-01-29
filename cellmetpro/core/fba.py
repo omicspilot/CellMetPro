@@ -8,15 +8,9 @@ flux variability analysis.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
-
-import numpy as np
-import pandas as pd
-
-if TYPE_CHECKING:
-    pass
 
 import cobra
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +77,14 @@ class FluxBalanceAnalyzer:
 
         if self.solution.status != "optimal":
             logger.warning(f"Optimization status: {self.solution.status}")
+            if self.solution.status == "infeasible":
+                raise ValueError(
+                    "Optimization infeasible. Check model constraints and bounds."
+                )
+            elif self.solution.status == "unbounded":
+                raise ValueError(
+                    "Optimization unbounded. Check reaction bounds."
+                )
 
         return self.solution.fluxes
 
@@ -270,13 +272,21 @@ class FluxBalanceAnalyzer:
             return "No solution computed yet. Run optimize() first."
 
         lines = [
-            f"FBA Solution Summary",
-            f"=" * 40,
+            "FBA Solution Summary",
+            "=" * 40,
             f"Status: {self.solution.status}",
-            f"Objective value: {self.solution.objective_value:.6f}",
-            f"",
-            f"Top 10 reactions by flux:",
         ]
+
+        if self.solution.status == "optimal":
+            lines.append(f"Objective value: {self.solution.objective_value:.6f}")
+        else:
+            lines.append("Objective value: N/A (solution not optimal)")
+            return "\n".join(lines)
+
+        lines.extend([
+            "",
+            "Top 10 reactions by flux:",
+        ])
 
         top_fluxes = self.solution.fluxes.abs().nlargest(10)
         for rxn_id, flux in top_fluxes.items():
@@ -309,7 +319,17 @@ def compute_yield(
     -------
     float
         Theoretical yield (product/substrate).
+
+    Raises
+    ------
+    ValueError
+        If substrate_uptake is zero or negative.
     """
+    if substrate_uptake <= 0:
+        raise ValueError(
+            f"substrate_uptake must be positive, got {substrate_uptake}"
+        )
+
     with model:
         # Set substrate uptake
         model.reactions.get_by_id(substrate_reaction).lower_bound = -substrate_uptake
@@ -365,6 +385,11 @@ def find_essential_reactions(
     """
     # Get wild-type objective
     wt_solution = model.optimize()
+    if wt_solution.status != "optimal":
+        raise ValueError(
+            f"Wild-type optimization failed with status: {wt_solution.status}. "
+            "Cannot determine essential reactions."
+        )
     wt_objective = wt_solution.objective_value
 
     essential = []

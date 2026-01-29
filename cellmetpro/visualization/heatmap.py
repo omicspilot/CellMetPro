@@ -70,7 +70,6 @@ def plot_pathway_heatmap(
     Figure
         Matplotlib figure with the plot.
     """
-    import matplotlib.pyplot as plt
 
     try:
         import seaborn as sns
@@ -185,7 +184,6 @@ def plot_reaction_heatmap(
     Figure
         Matplotlib figure with the plot.
     """
-    import matplotlib.pyplot as plt
 
     try:
         import seaborn as sns
@@ -405,7 +403,6 @@ def plot_correlation_heatmap(
     Figure
         Matplotlib figure.
     """
-    import matplotlib.pyplot as plt
 
     try:
         import seaborn as sns

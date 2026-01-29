@@ -8,6 +8,11 @@ This module contains the fundamental algorithms and utilities for:
 - Caching for optimization results
 """
 
+from .cache import (
+    CompassCache,
+    MemoryCache,
+    get_or_compute_max_fluxes,
+)
 from .compass import (
     CompassConfig,
     CompassResult,
@@ -21,23 +26,18 @@ from .fba import (
     find_blocked_reactions,
     find_essential_reactions,
 )
-from .preprocessing import (
-    DataLoader,
-    filter_cells,
-    filter_genes,
-    normalize_expression,
-    to_dataframe,
-)
 from .microclustering import (
     MicroclusterConfig,
     MicroclusterResult,
     microcluster,
     unpool_results,
 )
-from .cache import (
-    CompassCache,
-    MemoryCache,
-    get_or_compute_max_fluxes,
+from .preprocessing import (
+    DataLoader,
+    filter_cells,
+    filter_genes,
+    normalize_expression,
+    to_dataframe,
 )
 
 __all__ = [

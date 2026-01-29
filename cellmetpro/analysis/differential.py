@@ -13,9 +13,8 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-
 if TYPE_CHECKING:
-    import anndata as ad
+    pass
 
 
 class DifferentialAnalysis:
@@ -63,10 +62,15 @@ class DifferentialAnalysis:
         Returns
         -------
         pd.DataFrame
-            Results with columns: reaction, group1_mean, group2_mean, log2fc, pvalue, padj_bh, padj_bonf.
+            Results with columns: reaction, group1_mean, group2_mean,
+            log2fc, pvalue, padj_bh, padj_bonf.
         """
         
-        assert method in {"wilcoxon", "ttest", "mannwhitneyu"}, "Invalid method"
+        valid_methods = {"wilcoxon", "ttest", "mannwhitneyu"}
+        if method not in valid_methods:
+            raise ValueError(
+                f"Invalid method '{method}'. Must be one of: {valid_methods}"
+            )
     
         # Ensure columns in reaction_scores match index in groups
         common_cells = self.reaction_scores.columns.intersection(self.groups.index)
@@ -97,7 +101,9 @@ class DifferentialAnalysis:
             elif method == "ttest":
                 stat, pval = stats.ttest_ind(scores1, scores2)
             elif method == "mannwhitneyu":
-                stat, pval = stats.mannwhitneyu(scores1, scores2, alternative='two-sided')
+                stat, pval = stats.mannwhitneyu(
+                    scores1, scores2, alternative='two-sided'
+                )
         
             results.append({
                 "reaction": reaction_id,
@@ -110,8 +116,12 @@ class DifferentialAnalysis:
             
         # FDR correction
         results_df = pd.DataFrame(results)
-        _, padj_bh, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")      # Less strict
-        _, padj_bonf, _, _ = multipletests(results_df["pvalue"], method="bonferroni") # More strict
+        # Benjamini-Hochberg (less strict)
+        _, padj_bh, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")
+        # Bonferroni (more strict)
+        _, padj_bonf, _, _ = multipletests(
+            results_df["pvalue"], method="bonferroni"
+        )
 
         results_df["padj_bh"] = padj_bh
         results_df["padj_bonf"] = padj_bonf
@@ -291,7 +301,11 @@ class DifferentialAnalysis:
         >>> results = da.compare_multiple_groups(method="kruskal")
         >>> significant = results[results["padj_bh"] < 0.05]
         """
-        assert method in {"anova", "kruskal"}, f"Invalid method: {method}"
+        valid_methods = {"anova", "kruskal"}
+        if method not in valid_methods:
+            raise ValueError(
+                f"Invalid method '{method}'. Must be one of: {valid_methods}"
+            )
 
         # Ensure columns in reaction_scores match index in groups
         common_cells = self.reaction_scores.columns.intersection(self.groups.index)
@@ -313,7 +327,10 @@ class DifferentialAnalysis:
         results = []
         for reaction_id in scores.index:
             # Get scores for each group
-            group_scores = [scores.loc[reaction_id, cells].values for cells in group_cells.values()]
+            group_scores = [
+                scores.loc[reaction_id, cells].values
+                for cells in group_cells.values()
+            ]
 
             # Run statistical test
             if method == "anova":
@@ -387,7 +404,11 @@ class DifferentialAnalysis:
         >>> # Then do post-hoc for specific reaction
         >>> posthoc = da.posthoc_tests("R1", method="dunn")
         """
-        assert method in {"tukey", "dunn", "conover"}, f"Invalid method: {method}"
+        valid_methods = {"tukey", "dunn", "conover"}
+        if method not in valid_methods:
+            raise ValueError(
+                f"Invalid method '{method}'. Must be one of: {valid_methods}"
+            )
 
         if reaction not in self.reaction_scores.index:
             raise ValueError(f"Reaction {reaction} not found in data")
@@ -434,19 +455,18 @@ class DifferentialAnalysis:
         # Run Tukey HSD
         tukey_result = pairwise_tukeyhsd(all_values, all_groups)
 
-        # Extract results
+        # Extract results from summary table (more reliable than manual indexing)
+        summary_data = tukey_result.summary().data[1:]  # Skip header row
         results = []
-        for i in range(len(tukey_result.groupsunique)):
-            for j in range(i + 1, len(tukey_result.groupsunique)):
-                idx = i * (len(tukey_result.groupsunique) - 1) - i * (i - 1) // 2 + (j - i - 1)
-                if idx < len(tukey_result.pvalues):
-                    results.append({
-                        "group1": tukey_result.groupsunique[i],
-                        "group2": tukey_result.groupsunique[j],
-                        "mean_diff": tukey_result.meandiffs[idx],
-                        "pvalue": tukey_result.pvalues[idx],
-                        "significant": tukey_result.reject[idx],
-                    })
+        for row in summary_data:
+            group1, group2, meandiff, p_adj, lower, upper, reject = row
+            results.append({
+                "group1": group1,
+                "group2": group2,
+                "mean_diff": float(meandiff),
+                "pvalue": float(p_adj),
+                "significant": reject if isinstance(reject, bool) else reject == "True",
+            })
 
         return pd.DataFrame(results)
 
@@ -473,6 +493,10 @@ class DifferentialAnalysis:
 
         N = len(all_values)  # Total sample size
         n_comparisons = len(groups) * (len(groups) - 1) // 2
+
+        # Guard against edge case
+        if N <= 1:
+            raise ValueError("Need at least 2 total samples for Dunn's test")
 
         results = []
         for i, g1 in enumerate(groups):
@@ -548,6 +572,15 @@ class DifferentialAnalysis:
         N = len(all_values)
         k = len(groups)
         n_comparisons = k * (k - 1) // 2
+
+        # Guard against edge cases
+        if N <= 1:
+            raise ValueError("Need at least 2 total samples for Conover's test")
+        if N <= k:
+            raise ValueError(
+                f"Need more samples than groups for Conover's test. "
+                f"Got {N} samples and {k} groups."
+            )
 
         # Calculate S^2 (variance of ranks)
         S2 = (1 / (N - 1)) * (np.sum(ranks**2) - N * ((N + 1) / 2)**2)

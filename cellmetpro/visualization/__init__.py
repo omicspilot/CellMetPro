@@ -8,26 +8,26 @@ This module provides plotting functions for:
 - Interactive dashboards
 """
 
-from .umap import (
-    plot_embedding,
-    plot_metabolic_umap,
-    plot_metabolic_tsne,
-    plot_pca_variance,
-    plot_feature_on_embedding,
+from .dotplot import (
+    plot_enrichment_dotplot,
+    plot_reaction_dotplot,
 )
 from .heatmap import (
+    plot_correlation_heatmap,
+    plot_grouped_heatmap,
     plot_pathway_heatmap,
     plot_reaction_heatmap,
-    plot_grouped_heatmap,
-    plot_correlation_heatmap,
 )
-from .dotplot import (
-    plot_reaction_dotplot,
-    plot_enrichment_dotplot,
+from .umap import (
+    plot_embedding,
+    plot_feature_on_embedding,
+    plot_metabolic_tsne,
+    plot_metabolic_umap,
+    plot_pca_variance,
 )
 from .volcano import (
-    plot_volcano,
     plot_ma,
+    plot_volcano,
 )
 
 __all__ = [

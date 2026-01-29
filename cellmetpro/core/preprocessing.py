@@ -8,16 +8,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
-
-if TYPE_CHECKING:
-    pass
-
-import anndata as ad
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +157,10 @@ class DataLoader:
         parent_dir = self.filepath.parent
 
         if genes_file is None:
-            for name in ["genes.tsv", "features.tsv", "genes.tsv.gz", "features.tsv.gz"]:
+            gene_file_names = [
+                "genes.tsv", "features.tsv", "genes.tsv.gz", "features.tsv.gz"
+            ]
+            for name in gene_file_names:
                 candidate = parent_dir / name
                 if candidate.exists():
                     genes_file = candidate
@@ -178,7 +176,10 @@ class DataLoader:
         # Load gene names
         if genes_file is not None:
             genes_df = pd.read_csv(genes_file, sep="\t", header=None)
-            gene_names = genes_df.iloc[:, 0].values if genes_df.shape[1] == 1 else genes_df.iloc[:, 1].values
+            if genes_df.shape[1] == 1:
+                gene_names = genes_df.iloc[:, 0].values
+            else:
+                gene_names = genes_df.iloc[:, 1].values
         else:
             gene_names = [f"gene_{i}" for i in range(matrix.shape[1])]
 

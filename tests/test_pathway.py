@@ -1,13 +1,13 @@
 """Tests for pathway analysis module."""
 
+import cobra
 import numpy as np
 import pandas as pd
 import pytest
-import cobra
 
 from cellmetpro.analysis.pathway import (
-    PathwayAnalyzer,
     GOEnrichmentAnalyzer,
+    PathwayAnalyzer,
     create_go_annotations_from_dict,
 )
 

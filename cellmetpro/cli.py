@@ -76,7 +76,10 @@ Examples:
     run_parser = subparsers.add_parser(
         "run",
         help="Run COMPASS metabolic analysis pipeline",
-        description="Run COMPASS algorithm to score metabolic reactions from scRNA-seq data",
+        description=(
+            "Run COMPASS algorithm to score metabolic reactions "
+            "from scRNA-seq data"
+        ),
         formatter_class=RichHelpFormatter,
     )
     run_parser.add_argument(
@@ -310,7 +313,10 @@ Examples:
     pathway_parser = subparsers.add_parser(
         "pathway",
         help="Run pathway enrichment analysis",
-        description="Perform GO term or subsystem enrichment analysis on significant reactions",
+        description=(
+            "Perform GO term or subsystem enrichment analysis "
+            "on significant reactions"
+        ),
         formatter_class=RichHelpFormatter,
     )
     pathway_parser.add_argument(
@@ -343,7 +349,10 @@ Examples:
     )
     pathway_parser.add_argument(
         "--namespace",
-        choices=["biological_process", "molecular_function", "cellular_component", "all"],
+        choices=[
+            "biological_process", "molecular_function",
+            "cellular_component", "all"
+        ],
         default="biological_process",
         help="GO namespace for GO enrichment (default: biological_process)",
     )
@@ -375,7 +384,6 @@ def run_analysis(args: argparse.Namespace) -> int:
     int
         Exit code (0 for success).
     """
-    import pandas as pd
 
     from cellmetpro.core import (
         CompassConfig,
@@ -388,8 +396,8 @@ def run_analysis(args: argparse.Namespace) -> int:
     )
     from cellmetpro.models import load_gem
 
-    logger.info(f"CellMetPro COMPASS Analysis")
-    logger.info(f"=" * 50)
+    logger.info("CellMetPro COMPASS Analysis")
+    logger.info("=" * 50)
     logger.info(f"Input: {args.input}")
     logger.info(f"Model: {args.model}")
     logger.info(f"Output: {args.output}")
@@ -432,7 +440,8 @@ def run_analysis(args: argparse.Namespace) -> int:
     if args.microcluster:
         from cellmetpro.core import MicroclusterConfig
 
-        logger.info(f"Microclustering cells (target: {args.cells_per_cluster} cells/cluster)...")
+        target = args.cells_per_cluster
+        logger.info(f"Microclustering cells (target: {target} cells/cluster)...")
         mc_config = MicroclusterConfig(cells_per_cluster=args.cells_per_cluster)
         microcluster_result = microcluster(expression_df, mc_config)
         logger.info(f"Created {microcluster_result.n_clusters} microclusters")
@@ -498,7 +507,7 @@ def run_analysis(args: argparse.Namespace) -> int:
     with open(args.output / "config.json", "w") as f:
         json.dump(config_dict, f, indent=2)
 
-    logger.info(f"Analysis complete!")
+    logger.info("Analysis complete!")
     logger.info(f"Results saved to: {args.output}/")
     logger.info(f"  - reaction_penalties.{args.output_format}")
     logger.info(f"  - reaction_scores.{args.output_format}")
@@ -532,9 +541,8 @@ def run_dashboard(args: argparse.Namespace) -> int:
     logger.info(f"Running on port {args.port}")
 
     # Check if streamlit is available
-    try:
-        import streamlit
-    except ImportError:
+    import importlib.util
+    if importlib.util.find_spec("streamlit") is None:
         logger.error(
             "Streamlit not installed. Install with: pip install cellmetpro[dashboard]"
         )
@@ -650,7 +658,8 @@ def run_differential(args: argparse.Namespace) -> int:
     # Filter significant results
     if "padj_bh" in result.columns:
         n_significant = (result["padj_bh"] < args.fdr_threshold).sum()
-        logger.info(f"Significant reactions (FDR < {args.fdr_threshold}): {n_significant}")
+        fdr = args.fdr_threshold
+        logger.info(f"Significant reactions (FDR < {fdr}): {n_significant}")
 
     # Save results
     result.to_csv(output_file, index=False)
@@ -663,7 +672,7 @@ def run_differential(args: argparse.Namespace) -> int:
         matplotlib.use("Agg")
         from cellmetpro.visualization import plot_volcano
 
-        ax = plot_volcano(
+        plot_volcano(
             result,
             log2fc_threshold=args.log2fc_threshold,
             pvalue_threshold=args.fdr_threshold,
@@ -690,7 +699,10 @@ def run_cluster(args: argparse.Namespace) -> int:
     """
     import pandas as pd
 
-    from cellmetpro.analysis.clustering import MetabolicClustering, find_optimal_clusters
+    from cellmetpro.analysis.clustering import (
+        MetabolicClustering,
+        find_optimal_clusters,
+    )
 
     logger.info("CellMetPro Clustering Analysis")
     logger.info("=" * 50)
@@ -714,7 +726,9 @@ def run_cluster(args: argparse.Namespace) -> int:
     # Auto-detect optimal clusters if not specified
     if args.n_clusters is None and args.method == "kmeans":
         logger.info("Finding optimal number of clusters...")
-        n_clusters = find_optimal_clusters(pca_result, max_clusters=15, method="silhouette")
+        n_clusters = find_optimal_clusters(
+            pca_result, max_clusters=15, method="silhouette"
+        )
         logger.info(f"Optimal clusters: {n_clusters}")
         mc.n_clusters = n_clusters
 
@@ -762,7 +776,7 @@ def run_cluster(args: argparse.Namespace) -> int:
         matplotlib.use("Agg")
         from cellmetpro.visualization import plot_embedding
 
-        ax = plot_embedding(
+        plot_embedding(
             embedding,
             color=labels.astype(str),
             title=f"Metabolic Clustering ({args.method})",
@@ -791,8 +805,8 @@ def run_pathway(args: argparse.Namespace) -> int:
     """
     import pandas as pd
 
-    from cellmetpro.analysis.pathway import PathwayAnalyzer
-    from cellmetpro.models import load_gem, get_subsystem_reactions
+    from cellmetpro.analysis.pathway import subsystem_enrichment
+    from cellmetpro.models import get_subsystem_reactions, load_gem
 
     logger.info("CellMetPro Pathway Enrichment Analysis")
     logger.info("=" * 50)
@@ -842,18 +856,20 @@ def run_pathway(args: argparse.Namespace) -> int:
         # Get subsystem mapping
         subsystem_mapping = get_subsystem_reactions(model)
 
-        # Create pathway analyzer
-        pa = PathwayAnalyzer(subsystem_mapping)
-
-        # Run enrichment
-        result = pa.enrich(
-            reactions,
+        # Run enrichment using standalone function
+        result = subsystem_enrichment(
+            significant_reactions=reactions,
             background=background,
+            subsystem_mapping=subsystem_mapping,
         )
 
         # Filter by FDR
-        significant = result[result["padj"] < args.fdr_threshold]
-        logger.info(f"Significant subsystems (FDR < {args.fdr_threshold}): {len(significant)}")
+        if len(result) > 0 and "padj" in result.columns:
+            significant = result[result["padj"] < args.fdr_threshold]
+            fdr = args.fdr_threshold
+            logger.info(f"Significant subsystems (FDR < {fdr}): {len(significant)}")
+        else:
+            logger.info("No enriched subsystems found")
 
         # Save results
         result.to_csv(args.output / "subsystem_enrichment.csv", index=False)
@@ -861,32 +877,31 @@ def run_pathway(args: argparse.Namespace) -> int:
 
     else:  # GO enrichment
         logger.info("Running GO term enrichment...")
-        from cellmetpro.analysis.pathway import GOEnrichmentAnalyzer
 
-        # Create GO analyzer
-        go_analyzer = GOEnrichmentAnalyzer(model)
-
-        # Filter by namespace if specified
-        namespace = None if args.namespace == "all" else args.namespace
-
-        # Run enrichment
-        result = go_analyzer.enrich_reactions(
-            reactions,
-            background=background,
-            namespace=namespace,
+        # GO enrichment requires GO annotations
+        # Check if there's a GAF file available or warn the user
+        logger.warning(
+            "GO enrichment requires GO annotations file. "
+            "Please provide a GAF file using --go-annotations flag "
+            "(not yet implemented). Falling back to subsystem enrichment."
         )
 
-        if result is not None and len(result) > 0:
-            # Filter by FDR
-            significant = result[result["padj"] < args.fdr_threshold]
-            logger.info(f"Significant GO terms (FDR < {args.fdr_threshold}): {len(significant)}")
+        # Fallback to subsystem enrichment
+        subsystem_mapping = get_subsystem_reactions(model)
+        result = subsystem_enrichment(
+            significant_reactions=reactions,
+            background=background,
+            subsystem_mapping=subsystem_mapping,
+        )
 
-            # Save results
-            result.to_csv(args.output / "go_enrichment.csv", index=False)
-            logger.info(f"Results saved to {args.output / 'go_enrichment.csv'}")
-        else:
-            logger.warning("No GO enrichment results found")
-            result = pd.DataFrame()
+        if len(result) > 0 and "padj" in result.columns:
+            significant = result[result["padj"] < args.fdr_threshold]
+            fdr = args.fdr_threshold
+            logger.info(f"Significant subsystems (FDR < {fdr}): {len(significant)}")
+
+        # Save results
+        result.to_csv(args.output / "subsystem_enrichment.csv", index=False)
+        logger.info(f"Results saved to {args.output / 'subsystem_enrichment.csv'}")
 
     # Generate plot if requested
     if args.plot and len(result) > 0:
@@ -897,17 +912,16 @@ def run_pathway(args: argparse.Namespace) -> int:
 
         # Prepare data for plotting
         if args.method == "subsystem":
-            plot_result = result.rename(columns={
-                "pathway": "go_term",
-                "pathway": "go_name",
-            })
-            if "go_name" not in plot_result.columns:
+            plot_result = result.copy()
+            has_go_name = "go_name" in plot_result.columns
+            has_pathway = "pathway" in plot_result.columns
+            if not has_go_name and has_pathway:
                 plot_result["go_name"] = plot_result["pathway"]
                 plot_result["go_term"] = plot_result["pathway"]
         else:
             plot_result = result
 
-        ax = plot_enrichment_dotplot(
+        plot_enrichment_dotplot(
             plot_result,
             pvalue_threshold=args.fdr_threshold,
             title=f"{'Subsystem' if args.method == 'subsystem' else 'GO'} Enrichment",
@@ -932,7 +946,7 @@ def show_model_info(args: argparse.Namespace) -> int:
     int
         Exit code (0 for success).
     """
-    from cellmetpro.models import load_gem, get_subsystem_reactions
+    from cellmetpro.models import get_subsystem_reactions, load_gem
 
     try:
         model = load_gem(args.model)

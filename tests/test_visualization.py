@@ -1,22 +1,23 @@
 """Tests for visualization module."""
 
+import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
-import matplotlib
+
 matplotlib.use('Agg')  # Use non-interactive backend for testing
 import matplotlib.pyplot as plt
 
 from cellmetpro.visualization import (
-    plot_volcano,
-    plot_ma,
     plot_embedding,
-    plot_metabolic_umap,
-    plot_metabolic_tsne,
-    plot_reaction_heatmap,
-    plot_grouped_heatmap,
-    plot_reaction_dotplot,
     plot_enrichment_dotplot,
+    plot_grouped_heatmap,
+    plot_ma,
+    plot_metabolic_tsne,
+    plot_metabolic_umap,
+    plot_reaction_dotplot,
+    plot_reaction_heatmap,
+    plot_volcano,
 )
 
 
@@ -329,7 +330,7 @@ def test_enrichment_dotplot_no_significant():
 def test_volcano_save(differential_results, tmp_path):
     """Test volcano plot save functionality."""
     save_path = tmp_path / "volcano.png"
-    ax = plot_volcano(differential_results, save=str(save_path))
+    plot_volcano(differential_results, save=str(save_path))
 
     assert save_path.exists()
     plt.close()
@@ -338,7 +339,7 @@ def test_volcano_save(differential_results, tmp_path):
 def test_embedding_save(embedding, tmp_path):
     """Test embedding plot save functionality."""
     save_path = tmp_path / "embedding.png"
-    ax = plot_embedding(embedding, save=str(save_path))
+    plot_embedding(embedding, save=str(save_path))
 
     assert save_path.exists()
     plt.close()

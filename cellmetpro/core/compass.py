@@ -15,7 +15,6 @@ References:
 from __future__ import annotations
 
 import logging
-import re
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Literal
@@ -151,6 +150,9 @@ class CompassScorer:
         self._expression_upper = self.gene_expression.copy()
         self._expression_upper.index = self._expression_upper.index.str.upper()
 
+        # Track missing genes during GPR evaluation
+        self._missing_genes: set[str] = set()
+
         # Build gene-reaction mapping
         self._build_gpr_mapping()
 
@@ -251,6 +253,14 @@ class CompassScorer:
             f"{len(self.cell_names)} cells"
         )
 
+        # Warn about missing genes
+        if self._missing_genes:
+            logger.warning(
+                f"{len(self._missing_genes)} genes from model GPR rules not found "
+                f"in expression data. These genes were treated as zero expression. "
+                f"Examples: {list(self._missing_genes)[:5]}"
+            )
+
         # Apply penalty smoothing if lambda > 0
         if self.config.lambda_penalty > 0:
             penalties = self._smooth_penalties(penalties)
@@ -339,7 +349,8 @@ class CompassScorer:
         if gene in expression.index:
             return expression.loc[gene].values.astype(float)
         else:
-            # Gene not found - return zeros
+            # Gene not found - track and return zeros
+            self._missing_genes.add(gene)
             return np.zeros(expression.shape[1])
 
     def _split_at_operator(self, rule: str, operator: str) -> list[str]:
@@ -481,7 +492,6 @@ class CompassScorer:
 
         logger.info("Running COMPASS optimization...")
 
-        import cobra
 
         # Prepare model
         model = self.model.copy()
@@ -503,9 +513,10 @@ class CompassScorer:
             scores = self._optimize_parallel(model, penalties, internal_reactions)
         else:
             # Sequential processing
+            n_cells = len(self.cell_names)
             for cell_idx, cell_name in enumerate(self.cell_names):
                 if cell_idx % 10 == 0:
-                    logger.info(f"Processing cell {cell_idx + 1}/{len(self.cell_names)}")
+                    logger.info(f"Processing cell {cell_idx + 1}/{n_cells}")
 
                 cell_penalties = penalties[cell_name]
                 cell_scores = self._optimize_single_cell(
@@ -540,7 +551,6 @@ class CompassScorer:
         dict[str, float]
             Reaction ID to score mapping.
         """
-        import cobra
 
         scores = {}
         model = model.copy()
@@ -590,6 +600,11 @@ class CompassScorer:
                             objective_dict[r.forward_variable] = penalty
                             objective_dict[r.reverse_variable] = penalty
 
+                    # Skip if no penalties match model reactions
+                    if not objective_dict:
+                        scores[rxn_id] = penalties.get(rxn_id, 1.0)
+                        continue
+
                     model.objective = objective_dict
                     model.objective_direction = "min"
 
@@ -613,8 +628,6 @@ class CompassScorer:
         reaction_ids: list[str],
     ) -> dict[str, dict[str, float]]:
         """Run optimization in parallel across cells."""
-        import pickle
-
         # Serialize model for passing to workers
         model_str = cobra.io.to_json(model)
 
@@ -703,7 +716,6 @@ class CompassScorer:
         """
         logger.info("Computing exchange reaction scores...")
 
-        import cobra
 
         model = self.model.copy()
 
@@ -714,13 +726,14 @@ class CompassScorer:
         secretion_scores = {}
 
         for cell_name in self.cell_names:
-            cell_penalties = penalties[cell_name] if cell_name in penalties.columns else pd.Series()
-
             uptake_cell = {}
             secretion_cell = {}
 
             for rxn in exchange_rxns:
-                metabolite_id = list(rxn.metabolites.keys())[0].id if rxn.metabolites else rxn.id
+                if rxn.metabolites:
+                    metabolite_id = list(rxn.metabolites.keys())[0].id
+                else:
+                    metabolite_id = rxn.id
 
                 with model:
                     # Secretion: maximize forward flux
@@ -804,6 +817,11 @@ def _optimize_cell_worker(
                         objective_dict[r.forward_variable] = penalty
                         objective_dict[r.reverse_variable] = penalty
 
+                # Skip if no penalties match model reactions
+                if not objective_dict:
+                    scores[rxn_id] = penalties.get(rxn_id, 1.0)
+                    continue
+
                 model.objective = objective_dict
                 model.objective_direction = "min"
 
@@ -814,7 +832,8 @@ def _optimize_cell_worker(
                 else:
                     scores[rxn_id] = penalties.get(rxn_id, 1.0)
 
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Error optimizing {rxn_id}: {e}")
             scores[rxn_id] = penalties.get(rxn_id, 1.0)
 
     return scores

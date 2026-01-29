@@ -15,7 +15,6 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -337,7 +336,6 @@ def get_or_compute_max_fluxes(
     dict[str, float]
         Maximum flux for each reaction.
     """
-    import cobra
 
     # Try loading from cache
     if cache is not None:

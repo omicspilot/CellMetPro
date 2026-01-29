@@ -1,8 +1,9 @@
 """Tests for CLI module."""
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 class TestCLI:

@@ -92,9 +92,12 @@ def plot_volcano(
     df["neg_log10_pval"] = -np.log10(df[pvalue_col].clip(lower=1e-300))
 
     # Classify points
+    is_significant = df[pvalue_col] < pvalue_threshold
+    is_down = df[log2fc_col] <= -log2fc_threshold
+    is_up = df[log2fc_col] >= log2fc_threshold
     conditions = [
-        (df[log2fc_col] <= -log2fc_threshold) & (df[pvalue_col] < pvalue_threshold),  # Down
-        (df[log2fc_col] >= log2fc_threshold) & (df[pvalue_col] < pvalue_threshold),   # Up
+        is_down & is_significant,  # Down
+        is_up & is_significant,    # Up
     ]
     choices = ["down", "up"]
     df["category"] = np.select(conditions, choices, default="ns")

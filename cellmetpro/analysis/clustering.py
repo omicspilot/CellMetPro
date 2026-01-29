@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
-from scipy.sparse.csgraph import connected_components
-from scipy.spatial.distance import pdist, squareform
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -282,8 +280,8 @@ class MetabolicClustering:
     ) -> np.ndarray:
         """Graph-based clustering (Leiden or Louvain)."""
         try:
-            import leidenalg
             import igraph as ig
+            import leidenalg
         except ImportError:
             raise ImportError(
                 f"{method.capitalize()} clustering requires leidenalg and igraph. "

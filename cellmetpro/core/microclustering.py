@@ -269,8 +269,8 @@ def _leiden_clustering(
 ) -> np.ndarray:
     """Perform Leiden clustering on KNN graph."""
     try:
-        import leidenalg
         import igraph as ig
+        import leidenalg
     except ImportError:
         logger.warning("leidenalg not installed, falling back to k-means")
         return _kmeans_clustering(coords, len(coords) // 100, random_state)
@@ -372,7 +372,6 @@ def _readjust_clusters(
     Splits large clusters and merges small ones.
     """
     labels = labels.copy()
-    n_cells = len(labels)
 
     # Get cluster sizes
     unique_labels = np.unique(labels)
@@ -419,7 +418,9 @@ def _readjust_clusters(
             best_dist = np.inf
 
             for other_label in unique_labels:
-                if other_label != label and cluster_sizes[other_label] >= min_cluster_size:
+                is_different = other_label != label
+                is_large_enough = cluster_sizes[other_label] >= min_cluster_size
+                if is_different and is_large_enough:
                     other_mask = labels == other_label
                     other_center = coords[other_mask].mean(axis=0)
                     dist = np.linalg.norm(cluster_center - other_center)

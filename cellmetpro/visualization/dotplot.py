@@ -280,7 +280,8 @@ def plot_enrichment_dotplot(
 
     # Compute -log10 p-value for size
     neg_log_p = -np.log10(df[pvalue_col].clip(lower=1e-300))
-    sizes_norm = (neg_log_p - neg_log_p.min()) / (neg_log_p.max() - neg_log_p.min() + 1e-10)
+    p_range = neg_log_p.max() - neg_log_p.min() + 1e-10
+    sizes_norm = (neg_log_p - neg_log_p.min()) / p_range
     sizes = size_range[0] + sizes_norm * (size_range[1] - size_range[0])
 
     # Auto figure size

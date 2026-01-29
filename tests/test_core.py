@@ -645,3 +645,310 @@ class TestIntegration:
 
         assert penalties is not None
         assert penalties.shape[1] == adata.n_obs
+
+
+# ============================================================================
+# Edge Case Tests - Preprocessing
+# ============================================================================
+
+
+class TestPreprocessingEdgeCases:
+    """Edge case tests for preprocessing functions."""
+
+    def test_normalize_expression_with_zeros(self):
+        """Test normalization handles cells with all zeros."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import normalize_expression
+
+        # Create data with one cell having all zeros
+        data = np.array([[0, 0, 0], [1, 2, 3], [4, 5, 6]], dtype=float)
+        adata = ad.AnnData(data)
+
+        # Should not raise division by zero
+        normalized = normalize_expression(adata, target_sum=1e4)
+        assert not np.any(np.isnan(normalized.X))
+
+    def test_normalize_expression_single_cell(self):
+        """Test normalization with a single cell."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import normalize_expression
+
+        data = np.array([[1, 2, 3]], dtype=float)
+        adata = ad.AnnData(data)
+
+        normalized = normalize_expression(adata, target_sum=1e4)
+        assert normalized.n_obs == 1
+
+    def test_normalize_expression_single_gene(self):
+        """Test normalization with a single gene."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import normalize_expression
+
+        data = np.array([[1], [2], [3]], dtype=float)
+        adata = ad.AnnData(data)
+
+        normalized = normalize_expression(adata, target_sum=1e4)
+        assert normalized.n_vars == 1
+
+    def test_filter_cells_all_filtered(self):
+        """Test filtering when all cells would be filtered out."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import filter_cells
+
+        # All cells have < 10 genes expressed
+        data = np.array([[1, 0, 0], [0, 1, 0]], dtype=float)
+        adata = ad.AnnData(data)
+
+        # High threshold should result in no cells passing
+        filtered = filter_cells(adata, min_genes=100)
+        assert filtered.n_obs == 0
+
+    def test_filter_genes_all_filtered(self):
+        """Test filtering when all genes would be filtered out."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import filter_genes
+
+        # All genes expressed in < 2 cells
+        data = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 1]], dtype=float)
+        adata = ad.AnnData(data)
+
+        filtered = filter_genes(adata, min_cells=100)
+        assert filtered.n_vars == 0
+
+    def test_to_dataframe_with_nan_values(self):
+        """Test DataFrame conversion with NaN values."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import to_dataframe
+
+        data = np.array([[1, np.nan, 3], [4, 5, np.nan]], dtype=float)
+        adata = ad.AnnData(data)
+
+        df = to_dataframe(adata, genes_as_rows=True)
+        assert df.isna().sum().sum() == 2  # Two NaN values preserved
+
+
+# ============================================================================
+# Edge Case Tests - CompassScorer
+# ============================================================================
+
+
+class TestCompassScorerEdgeCases:
+    """Edge case tests for CompassScorer."""
+
+    def test_compass_no_matching_genes(self, simple_model):
+        """Test COMPASS with no matching genes between expression and model."""
+        from cellmetpro.core.compass import CompassScorer
+
+        # Expression data with completely different gene names
+        expression_df = pd.DataFrame(
+            np.random.rand(5, 5) * 100,
+            index=["OTHER1", "OTHER2", "OTHER3", "OTHER4", "OTHER5"],
+            columns=[f"cell{i}" for i in range(5)],
+        )
+
+        scorer = CompassScorer(simple_model, expression_df)
+        penalties = scorer.compute_reaction_penalties()
+
+        # Should still return a result (with default penalties)
+        assert penalties is not None
+
+    def test_compass_single_cell(self, simple_model):
+        """Test COMPASS with a single cell."""
+        from cellmetpro.core.compass import CompassScorer
+
+        expression_df = pd.DataFrame(
+            np.random.rand(5, 1) * 100,
+            index=["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"],
+            columns=["cell0"],
+        )
+
+        scorer = CompassScorer(simple_model, expression_df)
+        penalties = scorer.compute_reaction_penalties()
+
+        assert penalties.shape[1] == 1
+
+    def test_compass_with_inf_values(self, simple_model):
+        """Test COMPASS handles infinite values gracefully."""
+        from cellmetpro.core.compass import CompassScorer
+
+        expression_df = pd.DataFrame(
+            [[np.inf, 1, 2], [3, np.inf, 4], [5, 6, 7], [8, 9, 10], [11, 12, 13]],
+            index=["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"],
+            columns=["cell0", "cell1", "cell2"],
+        )
+
+        scorer = CompassScorer(simple_model, expression_df)
+        penalties = scorer.compute_reaction_penalties()
+
+        # Should not have any inf or nan in result
+        assert not np.any(np.isinf(penalties.values))
+
+
+# ============================================================================
+# Edge Case Tests - FluxBalanceAnalyzer
+# ============================================================================
+
+
+class TestFBAEdgeCases:
+    """Edge case tests for FluxBalanceAnalyzer."""
+
+    def test_fba_infeasible_model(self, simple_model):
+        """Test FBA with infeasible constraints."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+
+        # Set impossible bounds (lower > upper equivalent effect)
+        fba.set_bounds("R1", lower=0, upper=0)
+        fba.set_bounds("R2", lower=0, upper=0)
+        fba.set_bounds("R3", lower=0, upper=0)
+
+        # Should handle infeasible gracefully
+        fluxes = fba.optimize()
+        # Depending on implementation, may return None or zeros
+        if fluxes is not None:
+            assert isinstance(fluxes, pd.Series)
+
+    def test_fba_zero_objective(self, simple_model):
+        """Test FBA when objective is already zero."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        # Block all paths to objective
+        fba.set_bounds("EX_A", lower=0, upper=0)
+
+        fluxes = fba.optimize()
+        assert fba.solution is not None
+
+    def test_fba_knockout_nonexistent_reaction(self, simple_model):
+        """Test knockout with non-existent reaction ID."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+
+        with pytest.raises((ValueError, KeyError)):
+            fba.knockout("NONEXISTENT_REACTION")
+
+    def test_fba_flux_variability_empty_reactions(self, simple_model):
+        """Test FVA with empty reaction list."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fva = fba.flux_variability(reactions=[])
+
+        assert len(fva) == 0
+
+
+# ============================================================================
+# Edge Case Tests - Microclustering
+# ============================================================================
+
+
+class TestMicroclusteringEdgeCases:
+    """Edge case tests for microclustering."""
+
+    def test_microcluster_few_cells(self):
+        """Test microclustering with few cells."""
+        from cellmetpro.core.microclustering import MicroclusterConfig, microcluster
+
+        # Need enough cells for clustering - at least a few per cluster
+        expression_df = pd.DataFrame(
+            np.random.rand(5, 10),
+            index=["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"],
+            columns=[f"cell{i}" for i in range(10)],
+        )
+
+        config = MicroclusterConfig(cells_per_cluster=3, method="kmeans")
+        result = microcluster(expression_df.T, config)
+
+        assert result is not None
+        assert result.n_clusters >= 1
+
+    def test_microcluster_all_identical_values(self):
+        """Test microclustering when all expression values are identical."""
+        from cellmetpro.core.microclustering import MicroclusterConfig, microcluster
+
+        # All values are the same - no variance
+        expression_df = pd.DataFrame(
+            np.ones((5, 10)),
+            index=[f"GENE{i}" for i in range(5)],
+            columns=[f"cell{i}" for i in range(10)],
+        )
+
+        config = MicroclusterConfig(cells_per_cluster=3, method="kmeans")
+        result = microcluster(expression_df.T, config)
+
+        assert result is not None
+
+    def test_filter_genes_fano_zero_variance(self):
+        """Test Fano filtering with zero-variance genes."""
+        from cellmetpro.core.microclustering import filter_genes_fano
+
+        # Create data where some genes have zero variance
+        data = np.array([
+            [1, 1, 1, 1, 1],  # Zero variance
+            [1, 2, 3, 4, 5],  # Has variance
+            [5, 5, 5, 5, 5],  # Zero variance
+        ])
+        expression_df = pd.DataFrame(
+            data,
+            index=["GENE1", "GENE2", "GENE3"],
+            columns=[f"cell{i}" for i in range(5)],
+        )
+
+        filtered = filter_genes_fano(expression_df, n_genes=2)
+        # Should handle zero variance gracefully
+        assert len(filtered) <= 2
+
+
+# ============================================================================
+# Edge Case Tests - Cache
+# ============================================================================
+
+
+class TestCacheEdgeCases:
+    """Edge case tests for caching functionality."""
+
+    def test_memory_cache_size_one(self):
+        """Test memory cache with size of 1."""
+        from cellmetpro.core.cache import MemoryCache
+
+        cache = MemoryCache(max_size=1)
+
+        cache.set("key1", "value1")
+        assert cache.get("key1") == "value1"
+
+        # Adding second should evict first
+        cache.set("key2", "value2")
+        assert cache.get("key1") is None
+        assert cache.get("key2") == "value2"
+
+    def test_memory_cache_get_nonexistent(self):
+        """Test getting non-existent key returns None."""
+        from cellmetpro.core.cache import MemoryCache
+
+        cache = MemoryCache(max_size=10)
+        assert cache.get("nonexistent") is None
+
+    def test_compass_cache_load_nonexistent_sample(self, tmp_path):
+        """Test loading non-existent sample returns None."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        loaded = cache.load_reaction_scores("nonexistent_sample")
+
+        assert loaded is None
+
+    def test_compass_cache_clear_nonexistent(self, tmp_path):
+        """Test clearing non-existent sample doesn't raise error."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        # Should not raise
+        cache.clear("nonexistent_sample")

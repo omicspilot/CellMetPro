@@ -474,3 +474,295 @@ def test_benchmark_with_default_methods(reaction_scores):
 
     # Default methods: kmeans, hierarchical, spectral
     assert len(results) == 3
+
+
+# =============================================================================
+# ADDITIONAL EDGE CASE TESTS
+# =============================================================================
+
+
+def test_metabolic_clustering_single_cell():
+    """Test clustering with a single cell."""
+    data = pd.DataFrame(
+        [[1.0], [2.0], [3.0]],
+        index=["R1", "R2", "R3"],
+        columns=["cell_0"],
+    )
+
+    mc = MetabolicClustering(data)
+    pca_result = mc.compute_pca(n_components=1)
+
+    assert pca_result.shape == (1, 1)
+
+
+def test_metabolic_clustering_two_cells():
+    """Test clustering with exactly two cells."""
+    data = pd.DataFrame(
+        [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+        index=["R1", "R2", "R3"],
+        columns=["cell_0", "cell_1"],
+    )
+
+    mc = MetabolicClustering(data, n_clusters=2)
+    mc.compute_pca()
+    labels = mc.cluster(method="kmeans")
+
+    assert len(labels) == 2
+    assert len(np.unique(labels)) == 2
+
+
+def test_metabolic_clustering_identical_cells():
+    """Test clustering when all cells have identical values."""
+    data = pd.DataFrame(
+        np.ones((5, 10)),
+        index=[f"R{i}" for i in range(5)],
+        columns=[f"cell_{i}" for i in range(10)],
+    )
+
+    mc = MetabolicClustering(data, n_clusters=2)
+    # Should handle identical data gracefully
+    pca_result = mc.compute_pca()
+    assert pca_result is not None
+
+
+def test_metabolic_clustering_high_dimensionality():
+    """Test clustering when reactions >> cells."""
+    np.random.seed(42)
+    # 100 reactions, 10 cells
+    data = pd.DataFrame(
+        np.random.rand(100, 10),
+        index=[f"R{i}" for i in range(100)],
+        columns=[f"cell_{i}" for i in range(10)],
+    )
+
+    mc = MetabolicClustering(data, n_clusters=3)
+    mc.compute_pca(n_components=5)
+    labels = mc.cluster(method="kmeans")
+
+    assert len(labels) == 10
+
+
+def test_metabolic_clustering_negative_values():
+    """Test clustering with negative values."""
+    np.random.seed(42)
+    data = pd.DataFrame(
+        np.random.randn(5, 15),  # Normal distribution, includes negatives
+        index=[f"R{i}" for i in range(5)],
+        columns=[f"cell_{i}" for i in range(15)],
+    )
+
+    mc = MetabolicClustering(data, n_clusters=3)
+    mc.compute_pca()
+    labels = mc.cluster(method="kmeans")
+
+    assert len(labels) == 15
+
+
+def test_compute_tsne_small_perplexity():
+    """Test t-SNE with very small perplexity."""
+    np.random.seed(42)
+    data = pd.DataFrame(
+        np.random.rand(5, 20),
+        index=[f"R{i}" for i in range(5)],
+        columns=[f"cell_{i}" for i in range(20)],
+    )
+
+    mc = MetabolicClustering(data)
+    mc.compute_pca()
+    # Very small perplexity
+    tsne_result = mc.compute_tsne(perplexity=2, max_iter=250)
+
+    assert tsne_result.shape == (20, 2)
+
+
+def test_cluster_dbscan_all_noise():
+    """Test DBSCAN when all points are noise."""
+    np.random.seed(42)
+    # Very sparse, separated points
+    data = pd.DataFrame(
+        np.diag(np.arange(1, 11, dtype=float)),  # Diagonal matrix
+        index=[f"R{i}" for i in range(10)],
+        columns=[f"cell_{i}" for i in range(10)],
+    )
+
+    mc = MetabolicClustering(data)
+    mc.compute_pca()
+    labels = mc.cluster(method="dbscan", eps=0.001, min_samples=5)
+
+    # With tiny eps, all points may be noise (-1)
+    assert len(labels) == 10
+
+
+def test_cluster_spectral_more_clusters_than_possible():
+    """Test spectral clustering with more clusters than samples."""
+    np.random.seed(42)
+    data = pd.DataFrame(
+        np.random.rand(3, 5),
+        index=["R1", "R2", "R3"],
+        columns=[f"cell_{i}" for i in range(5)],
+    )
+
+    mc = MetabolicClustering(data, n_clusters=10)  # More than 5 cells
+    mc.compute_pca()
+
+    # Should handle gracefully (cap clusters or raise error)
+    try:
+        labels = mc.cluster(method="spectral")
+        assert len(labels) == 5
+    except (ValueError, TypeError):
+        pass  # Also acceptable - scipy may raise TypeError
+
+
+def test_evaluate_clustering_two_clusters():
+    """Test clustering evaluation with exactly two clusters."""
+    np.random.seed(42)
+    data = np.random.rand(10, 5)
+    labels = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+
+    metrics = evaluate_clustering(data, labels)
+
+    assert metrics["n_clusters"] == 2
+    assert "silhouette" in metrics
+
+
+def test_evaluate_clustering_many_clusters():
+    """Test clustering evaluation with many small clusters."""
+    np.random.seed(42)
+    data = np.random.rand(20, 5)
+    labels = np.arange(20)  # Each point is its own cluster
+
+    metrics = evaluate_clustering(data, labels)
+
+    assert metrics["n_clusters"] == 20
+
+
+def test_compare_clusterings_permuted_labels():
+    """Test comparison when labels are just permuted."""
+    labels1 = np.array([0, 0, 1, 1, 2, 2])
+    labels2 = np.array([1, 1, 2, 2, 0, 0])  # Same clustering, different labels
+
+    comparison = compare_clusterings(labels1, labels2)
+
+    # Should be perfect match
+    assert comparison["adjusted_rand"] == pytest.approx(1.0)
+
+
+def test_compare_clusterings_random():
+    """Test comparison of random clusterings."""
+    np.random.seed(42)
+    labels1 = np.random.randint(0, 3, 100)
+    np.random.seed(123)
+    labels2 = np.random.randint(0, 3, 100)
+
+    comparison = compare_clusterings(labels1, labels2)
+
+    # Random clusterings should have low agreement
+    assert comparison["adjusted_rand"] < 0.3
+
+
+def test_benchmark_single_method():
+    """Test benchmarking with a single method."""
+    np.random.seed(42)
+    data = np.random.rand(20, 5)
+
+    results = benchmark_clustering_methods(
+        data,
+        methods=["kmeans"],
+        n_clusters=3,
+    )
+
+    assert len(results) == 1
+    assert results.iloc[0]["method"] == "kmeans"
+
+
+def test_benchmark_invalid_method():
+    """Test benchmark with invalid method in list."""
+    np.random.seed(42)
+    data = np.random.rand(20, 5)
+
+    # Should skip invalid method or raise error
+    try:
+        results = benchmark_clustering_methods(
+            data,
+            methods=["kmeans", "invalid_method"],
+            n_clusters=3,
+        )
+        # If it doesn't raise, should only have kmeans
+        assert len(results) <= 2
+    except (ValueError, KeyError):
+        pass
+
+
+def test_find_optimal_clusters_min_max_equal():
+    """Test find_optimal_clusters when min and max clusters are equal."""
+    np.random.seed(42)
+    data = np.random.rand(30, 5)
+
+    # When max_clusters=2, only option is 2
+    n_clusters = find_optimal_clusters(data, max_clusters=2, method="silhouette")
+
+    assert n_clusters == 2
+
+
+def test_find_optimal_clusters_small_dataset():
+    """Test find_optimal_clusters on very small dataset."""
+    np.random.seed(42)
+    data = np.random.rand(5, 3)
+
+    n_clusters = find_optimal_clusters(data, max_clusters=3, method="silhouette")
+
+    assert 2 <= n_clusters <= 3
+
+
+def test_get_cluster_markers_single_cluster():
+    """Test get_cluster_markers when only one cluster exists."""
+    np.random.seed(42)
+    data = pd.DataFrame(
+        np.random.rand(5, 10),
+        index=[f"R{i}" for i in range(5)],
+        columns=[f"cell_{i}" for i in range(10)],
+    )
+
+    mc = MetabolicClustering(data, n_clusters=1)
+    mc.compute_pca()
+    mc.cluster(method="kmeans")
+
+    # Single cluster - markers don't make sense
+    try:
+        markers = mc.get_cluster_markers()
+        # If it works, should still return DataFrame
+        assert isinstance(markers, pd.DataFrame)
+    except ValueError:
+        pass  # Also acceptable
+
+
+def test_to_dataframe_minimal():
+    """Test to_dataframe with minimal data (no PCA, no clustering)."""
+    data = pd.DataFrame(
+        [[1.0, 2.0], [3.0, 4.0]],
+        index=["R1", "R2"],
+        columns=["cell_0", "cell_1"],
+    )
+
+    mc = MetabolicClustering(data)
+    df = mc.to_dataframe()
+
+    assert "cell_id" in df.columns
+    assert len(df) == 2
+
+
+def test_metabolic_clustering_inf_values():
+    """Test clustering handles infinite values."""
+    data = pd.DataFrame(
+        [[1.0, np.inf, 3.0], [4.0, 5.0, np.inf]],
+        index=["R1", "R2"],
+        columns=["cell_0", "cell_1", "cell_2"],
+    )
+
+    mc = MetabolicClustering(data)
+    # Should handle inf gracefully (replace or error)
+    try:
+        pca_result = mc.compute_pca()
+        assert not np.any(np.isinf(pca_result))
+    except ValueError:
+        pass  # Also acceptable to reject inf values

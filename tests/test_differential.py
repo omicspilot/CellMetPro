@@ -682,3 +682,247 @@ def test_all_pairwise_comparisons_methods(
         result = da.all_pairwise_comparisons(method=method)
         assert len(result) == 15
         assert not result["pvalue"].isna().any()
+
+
+# =============================================================================
+# EDGE CASE TESTS
+# =============================================================================
+
+
+class TestDifferentialEdgeCases:
+    """Edge case tests for differential analysis."""
+
+    def test_compare_groups_single_reaction(self):
+        """Test comparison with a single reaction."""
+        np.random.seed(42)
+
+        scores = pd.DataFrame(
+            np.random.rand(1, 10),
+            index=["R1"],
+            columns=[f"cell_{i}" for i in range(10)],
+        )
+        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+
+        da = DifferentialAnalysis(scores, labels)
+        result = da.compare_groups("A", "B")
+
+        assert len(result) == 1
+        assert result.iloc[0]["reaction"] == "R1"
+
+    def test_compare_groups_single_cell_per_group(self):
+        """Test comparison with minimal cells per group."""
+        np.random.seed(42)
+
+        scores = pd.DataFrame(
+            np.array([[1.0, 5.0], [2.0, 6.0]]),
+            index=["R1", "R2"],
+            columns=["cell_0", "cell_1"],
+        )
+        labels = pd.Series(["A", "B"], index=["cell_0", "cell_1"])
+
+        da = DifferentialAnalysis(scores, labels)
+        # Should handle but may produce NaN p-values for some methods
+        result = da.compare_groups("A", "B", method="ttest")
+
+        assert len(result) == 2
+
+    def test_compare_groups_constant_values_one_group(self):
+        """Test when one group has constant values (zero variance)."""
+        scores = pd.DataFrame(
+            np.array([[1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]]),
+            index=["R1"],
+            columns=[f"cell_{i}" for i in range(10)],
+        )
+        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+
+        da = DifferentialAnalysis(scores, labels)
+        # Should handle zero variance gracefully
+        result = da.compare_groups("A", "B")
+
+        assert len(result) == 1
+
+    def test_compare_groups_identical_groups(self):
+        """Test when both groups have identical values."""
+        np.random.seed(42)
+        values = np.random.rand(3, 10)
+
+        scores = pd.DataFrame(
+            values,
+            index=["R1", "R2", "R3"],
+            columns=[f"cell_{i}" for i in range(10)],
+        )
+        # Same data in both groups (no actual difference)
+        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+
+        # Make values identical between groups for R1
+        scores.loc["R1", "cell_0":"cell_4"] = 1.0
+        scores.loc["R1", "cell_5":"cell_9"] = 1.0
+
+        da = DifferentialAnalysis(scores, labels)
+        result = da.compare_groups("A", "B")
+
+        # R1 should have log2fc close to 0
+        r1_log2fc = result[result["reaction"] == "R1"]["log2fc"].iloc[0]
+        assert abs(r1_log2fc) < 1e-10
+
+    def test_compare_groups_with_nan_values(self):
+        """Test handling of NaN values in reaction scores."""
+        scores = pd.DataFrame(
+            np.array([[1.0, 2.0, np.nan, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]]),
+            index=["R1"],
+            columns=[f"cell_{i}" for i in range(10)],
+        )
+        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+
+        da = DifferentialAnalysis(scores, labels)
+        result = da.compare_groups("A", "B")
+
+        # Should produce valid result despite NaN
+        assert len(result) == 1
+
+    def test_compare_groups_nonexistent_group(self):
+        """Test behavior when comparing with non-existent group.
+
+        The code may return NaN p-values or empty results when group doesn't exist.
+        """
+        np.random.seed(42)
+        scores = pd.DataFrame(
+            np.random.rand(3, 6),
+            index=["R1", "R2", "R3"],
+            columns=[f"cell_{i}" for i in range(6)],
+        )
+        labels = pd.Series(["A"] * 3 + ["B"] * 3, index=[f"cell_{i}" for i in range(6)])
+
+        da = DifferentialAnalysis(scores, labels)
+
+        # Code handles missing group gracefully (returns NaN p-values)
+        result = da.compare_groups("A", "NONEXISTENT")
+        # Result will have NaN p-values due to empty group
+        assert len(result) == 3
+        assert result["pvalue"].isna().all()
+
+    def test_compute_effect_size_zero_pooled_std(self):
+        """Test effect size when pooled std is zero (constant values)."""
+        scores = pd.DataFrame(
+            np.array([[1.0, 1.0, 1.0, 2.0, 2.0, 2.0]]),
+            index=["R1"],
+            columns=[f"cell_{i}" for i in range(6)],
+        )
+        labels = pd.Series(["A"] * 3 + ["B"] * 3, index=[f"cell_{i}" for i in range(6)])
+
+        da = DifferentialAnalysis(scores, labels)
+        result = da.compute_effect_size("A", "B")
+
+        # Should handle division by zero gracefully
+        assert len(result) == 1
+        # Effect size may be inf or handled differently
+
+    def test_rank_reactions_nonexistent_group(self):
+        """Test rank_reactions with non-existent group.
+
+        Code handles missing group gracefully with NaN statistics.
+        """
+        np.random.seed(42)
+        scores = pd.DataFrame(
+            np.random.rand(3, 6),
+            index=["R1", "R2", "R3"],
+            columns=[f"cell_{i}" for i in range(6)],
+        )
+        labels = pd.Series(["A"] * 3 + ["B"] * 3, index=[f"cell_{i}" for i in range(6)])
+
+        da = DifferentialAnalysis(scores, labels)
+
+        result = da.rank_reactions("NONEXISTENT")
+        # Result will have NaN means due to empty group
+        assert len(result) == 3
+        assert result["mean_score"].isna().all()
+
+    def test_compare_multiple_groups_two_groups_only(self):
+        """Test multi-group comparison with exactly two groups."""
+        np.random.seed(42)
+        scores = pd.DataFrame(
+            np.random.rand(3, 6),
+            index=["R1", "R2", "R3"],
+            columns=[f"cell_{i}" for i in range(6)],
+        )
+        labels = pd.Series(["A"] * 3 + ["B"] * 3, index=[f"cell_{i}" for i in range(6)])
+
+        da = DifferentialAnalysis(scores, labels)
+        result = da.compare_multiple_groups()
+
+        assert len(result) == 3
+        assert result["n_groups"].iloc[0] == 2
+
+    def test_posthoc_two_groups_only(self):
+        """Test post-hoc test with only two groups (degenerates to pairwise)."""
+        np.random.seed(42)
+        scores = pd.DataFrame(
+            np.random.rand(3, 6),
+            index=["R1", "R2", "R3"],
+            columns=[f"cell_{i}" for i in range(6)],
+        )
+        labels = pd.Series(["A"] * 3 + ["B"] * 3, index=[f"cell_{i}" for i in range(6)])
+
+        da = DifferentialAnalysis(scores, labels)
+        result = da.posthoc_tests("R1", method="dunn")
+
+        # Should have exactly 1 pairwise comparison
+        assert len(result) == 1
+
+    def test_all_pairwise_comparisons_single_group_cells(self):
+        """Test pairwise comparisons when one group has very few cells."""
+        np.random.seed(42)
+        scores = pd.DataFrame(
+            np.random.rand(2, 7),
+            index=["R1", "R2"],
+            columns=[f"cell_{i}" for i in range(7)],
+        )
+        # Group A has 1 cell, B has 3, C has 3
+        labels = pd.Series(
+            ["A"] + ["B"] * 3 + ["C"] * 3,
+            index=[f"cell_{i}" for i in range(7)],
+        )
+
+        da = DifferentialAnalysis(scores, labels)
+        # Should still work, though statistical power is limited
+        result = da.all_pairwise_comparisons()
+
+        # 2 reactions x 3 comparisons = 6 rows
+        assert len(result) == 6
+
+    def test_differential_empty_intersection(self):
+        """Test when there's no cell overlap between scores and labels.
+
+        Code handles this by returning NaN p-values due to empty groups.
+        """
+        scores = pd.DataFrame(
+            np.random.rand(3, 5),
+            index=["R1", "R2", "R3"],
+            columns=["cell_0", "cell_1", "cell_2", "cell_3", "cell_4"],
+        )
+        labels = pd.Series(
+            ["A", "A", "B", "B", "B"],
+            index=["cell_100", "cell_101", "cell_102", "cell_103", "cell_104"],
+        )
+
+        da = DifferentialAnalysis(scores, labels)
+
+        # Code handles this gracefully - produces NaN p-values
+        result = da.compare_groups("A", "B")
+        assert len(result) == 3
+        assert result["pvalue"].isna().all()
+
+    def test_compare_groups_large_log2fc_handling(self):
+        """Test handling of very large fold changes (near-zero values)."""
+        scores = pd.DataFrame(
+            np.array([[1e-10, 1e-10, 1e-10, 1.0, 1.0, 1.0]]),
+            index=["R1"],
+            columns=[f"cell_{i}" for i in range(6)],
+        )
+        labels = pd.Series(["A"] * 3 + ["B"] * 3, index=[f"cell_{i}" for i in range(6)])
+
+        da = DifferentialAnalysis(scores, labels)
+        result = da.compare_groups("A", "B")
+
+        # log2fc should be finite (not inf)
+        assert np.isfinite(result["log2fc"].iloc[0])

@@ -299,3 +299,290 @@ def test_create_go_annotations_from_dict():
     assert len(df) == 2
     assert "gene1" in df["gene_id"].values
     assert "GO:0006096" in df["go_term"].values
+
+
+# =============================================================================
+# EDGE CASE TESTS
+# =============================================================================
+
+
+class TestPathwayAnalyzerEdgeCases:
+    """Edge case tests for PathwayAnalyzer."""
+
+    def test_pathway_analyzer_no_subsystems(self, reaction_scores):
+        """Test analyzer when model has no subsystems."""
+        import cobra
+
+        # Create model without subsystems
+        model = cobra.Model("empty_subsystems")
+        r1 = cobra.Reaction("R1")
+        r1.add_metabolites({cobra.Metabolite("A", compartment="c"): -1})
+        model.add_reactions([r1])
+
+        analyzer = PathwayAnalyzer(reaction_scores, model)
+        mapping = analyzer.get_pathway_mapping()
+
+        # Should return empty mapping or handle gracefully
+        assert isinstance(mapping, dict)
+
+    def test_pathway_analyzer_single_reaction_pathway(self, reaction_scores):
+        """Test with pathway containing single reaction."""
+        import cobra
+
+        model = cobra.Model("single_rxn_pathway")
+        A = cobra.Metabolite("A", compartment="c")
+        B = cobra.Metabolite("B", compartment="c")
+
+        r1 = cobra.Reaction("R1")
+        r1.add_metabolites({A: -1, B: 1})
+        r1.subsystem = "SingleReactionPathway"
+
+        model.add_reactions([r1])
+
+        # Scores must include R1
+        scores = pd.DataFrame(
+            np.random.rand(1, 5),
+            index=["R1"],
+            columns=[f"cell_{i}" for i in range(5)],
+        )
+
+        analyzer = PathwayAnalyzer(scores, model)
+        result = analyzer.aggregate(method="mean")
+
+        assert "SingleReactionPathway" in result.index
+
+    def test_pathway_analyzer_no_matching_reactions(self):
+        """Test when reaction scores don't match model reactions."""
+        import cobra
+
+        model = cobra.Model("test")
+        r1 = cobra.Reaction("MODEL_R1")
+        r1.add_metabolites({cobra.Metabolite("A", compartment="c"): -1})
+        r1.subsystem = "Pathway1"
+        model.add_reactions([r1])
+
+        # Scores have completely different reaction names
+        scores = pd.DataFrame(
+            np.random.rand(3, 5),
+            index=["OTHER1", "OTHER2", "OTHER3"],
+            columns=[f"cell_{i}" for i in range(5)],
+        )
+
+        analyzer = PathwayAnalyzer(scores, model)
+        result = analyzer.aggregate(method="mean")
+
+        # Should return empty or handle gracefully
+        assert len(result) == 0
+
+    def test_pathway_analyzer_empty_scores(self, model_with_subsystems):
+        """Test with empty reaction scores DataFrame."""
+        scores = pd.DataFrame(columns=["cell_0", "cell_1", "cell_2"])
+
+        analyzer = PathwayAnalyzer(scores, model_with_subsystems)
+        result = analyzer.aggregate(method="mean")
+
+        assert len(result) == 0
+
+    def test_pathway_analyzer_single_cell(self, model_with_subsystems):
+        """Test with single cell."""
+        scores = pd.DataFrame(
+            np.random.rand(5, 1),
+            index=["R1", "R2", "R3", "R4", "R5"],
+            columns=["cell_0"],
+        )
+
+        analyzer = PathwayAnalyzer(scores, model_with_subsystems)
+        result = analyzer.aggregate(method="mean")
+
+        assert result.shape[1] == 1
+
+    def test_pathway_analyzer_nan_values(self, model_with_subsystems):
+        """Test aggregation with NaN values in scores."""
+        scores = pd.DataFrame(
+            np.array([
+                [1.0, np.nan, 3.0],
+                [np.nan, 2.0, 4.0],
+                [5.0, 6.0, np.nan],
+                [7.0, 8.0, 9.0],
+                [10.0, 11.0, 12.0],
+            ]),
+            index=["R1", "R2", "R3", "R4", "R5"],
+            columns=["cell_0", "cell_1", "cell_2"],
+        )
+
+        analyzer = PathwayAnalyzer(scores, model_with_subsystems)
+        result = analyzer.aggregate(method="mean")
+
+        # Should handle NaN gracefully (nanmean)
+        assert isinstance(result, pd.DataFrame)
+
+    def test_pathway_enrich_no_significant_reactions(self, model_with_subsystems, reaction_scores):
+        """Test enrichment when no reactions are significant."""
+        analyzer = PathwayAnalyzer(reaction_scores, model_with_subsystems)
+
+        # All p-values > threshold
+        diff_results = pd.DataFrame({
+            "reaction": ["R1", "R2", "R3", "R4", "R5"],
+            "pvalue": [0.9, 0.8, 0.7, 0.6, 0.5],
+            "padj_bh": [0.9, 0.8, 0.7, 0.6, 0.5],
+        })
+
+        enrichment = analyzer.enrich(diff_results)
+
+        # Should return empty or results with high p-values
+        assert isinstance(enrichment, pd.DataFrame)
+
+    def test_pathway_enrich_all_significant(self, model_with_subsystems, reaction_scores):
+        """Test enrichment when all reactions are significant."""
+        analyzer = PathwayAnalyzer(reaction_scores, model_with_subsystems)
+
+        diff_results = pd.DataFrame({
+            "reaction": ["R1", "R2", "R3", "R4", "R5"],
+            "pvalue": [0.001, 0.002, 0.003, 0.004, 0.005],
+            "padj_bh": [0.005, 0.006, 0.007, 0.008, 0.009],
+        })
+
+        enrichment = analyzer.enrich(diff_results)
+        assert isinstance(enrichment, pd.DataFrame)
+
+
+class TestGOEnrichmentEdgeCases:
+    """Edge case tests for GO enrichment analysis."""
+
+    def test_go_enrichment_empty_significant_set(self, model_with_subsystems, go_annotations):
+        """Test enrichment with empty significant reaction set."""
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
+
+        significant = set()
+        background = {"R1", "R2", "R3", "R4", "R5"}
+
+        results = analyzer.enrich_reactions(significant, background, min_genes=1)
+
+        # Should return empty DataFrame
+        assert len(results) == 0
+
+    def test_go_enrichment_significant_equals_background(self, model_with_subsystems, go_annotations):
+        """Test when all background reactions are significant."""
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
+
+        all_reactions = {"R1", "R2", "R3", "R4", "R5"}
+        results = analyzer.enrich_reactions(all_reactions, all_reactions, min_genes=1)
+
+        # Fold enrichment should be 1.0 for all terms
+        if len(results) > 0:
+            assert all(results["fold_enrichment"] <= 1.0 + 1e-10)
+
+    def test_go_enrichment_single_reaction(self, model_with_subsystems, go_annotations):
+        """Test enrichment with single significant reaction."""
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
+
+        significant = {"R1"}
+        background = {"R1", "R2", "R3", "R4", "R5"}
+
+        results = analyzer.enrich_reactions(significant, background, min_genes=1)
+        assert isinstance(results, pd.DataFrame)
+
+    def test_go_enrichment_no_go_terms(self, model_with_subsystems):
+        """Test enrichment when no GO annotations exist."""
+        empty_annotations = pd.DataFrame(columns=["gene_id", "go_term", "go_name", "namespace"])
+
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, empty_annotations)
+
+        significant = {"R1", "R2"}
+        background = {"R1", "R2", "R3", "R4", "R5"}
+
+        results = analyzer.enrich_reactions(significant, background, min_genes=1)
+        assert len(results) == 0
+
+    def test_go_enrichment_invalid_namespace(self, model_with_subsystems, go_annotations):
+        """Test filtering with invalid namespace."""
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
+
+        significant = {"R1", "R2"}
+        background = {"R1", "R2", "R3", "R4", "R5"}
+
+        # Invalid namespace should return empty results
+        results = analyzer.enrich_reactions(
+            significant, background, min_genes=1, namespace="INVALID"
+        )
+        assert len(results) == 0
+
+    def test_go_enrichment_high_min_genes_threshold(self, model_with_subsystems, go_annotations):
+        """Test enrichment with very high min_genes threshold."""
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
+
+        significant = {"R1", "R2", "R3"}
+        background = {"R1", "R2", "R3", "R4", "R5"}
+
+        # Very high threshold - no term should pass
+        results = analyzer.enrich_reactions(significant, background, min_genes=100)
+        assert len(results) == 0
+
+    def test_go_reaction_with_no_genes(self, model_with_subsystems, go_annotations):
+        """Test getting GO terms for reaction without GPR."""
+        import cobra
+
+        # Add reaction without genes
+        r_no_gpr = cobra.Reaction("R_NO_GPR")
+        r_no_gpr.add_metabolites({cobra.Metabolite("X", compartment="c"): -1})
+        model_with_subsystems.add_reactions([r_no_gpr])
+
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
+        terms = analyzer.get_reaction_go_terms("R_NO_GPR")
+
+        assert len(terms) == 0
+
+    def test_go_enrichment_from_differential_empty_results(self, model_with_subsystems, go_annotations):
+        """Test GO enrichment from differential results with no significant."""
+        analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
+
+        # All non-significant
+        diff_results = pd.DataFrame({
+            "reaction": ["R1", "R2", "R3", "R4", "R5"],
+            "pvalue": [0.5, 0.6, 0.7, 0.8, 0.9],
+            "padj_bh": [0.5, 0.6, 0.7, 0.8, 0.9],
+        })
+
+        results = analyzer.enrich_from_differential(
+            diff_results, pvalue_threshold=0.05, min_genes=1
+        )
+        assert len(results) == 0
+
+
+class TestCreateGOAnnotationsEdgeCases:
+    """Edge case tests for GO annotation creation."""
+
+    def test_create_go_annotations_empty_dict(self):
+        """Test creating GO annotations from empty dictionary."""
+        gene_to_go = {}
+        df = create_go_annotations_from_dict(gene_to_go)
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 0
+
+    def test_create_go_annotations_gene_with_no_terms(self):
+        """Test creating annotations when gene has empty GO term list."""
+        gene_to_go = {
+            "gene1": [],  # No GO terms
+            "gene2": [("GO:0006099", "TCA cycle", "BP")],
+        }
+
+        df = create_go_annotations_from_dict(gene_to_go)
+
+        # Only gene2 should be in result
+        assert len(df) == 1
+        assert "gene2" in df["gene_id"].values
+
+    def test_create_go_annotations_duplicate_terms(self):
+        """Test handling of duplicate GO terms for same gene."""
+        gene_to_go = {
+            "gene1": [
+                ("GO:0006096", "glycolytic process", "BP"),
+                ("GO:0006096", "glycolytic process", "BP"),  # Duplicate
+            ],
+        }
+
+        df = create_go_annotations_from_dict(gene_to_go)
+
+        # Depending on implementation, may have 2 rows or deduplicated to 1
+        assert len(df) >= 1

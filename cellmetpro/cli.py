@@ -140,6 +140,17 @@ Examples:
         help="Number of parallel processes (default: 1)",
     )
     run_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Number of cells per batch for memory efficiency (default: 100)",
+    )
+    run_parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bars",
+    )
+    run_parser.add_argument(
         "--microcluster",
         action="store_true",
         help="Use microclustering for large datasets",
@@ -438,6 +449,8 @@ def run_analysis(args: argparse.Namespace) -> int:
         lambda_penalty=args.lambda_penalty,
         n_neighbors=args.n_neighbors,
         n_processes=args.n_processes,
+        batch_size=args.batch_size,
+        show_progress=not args.no_progress,
     )
 
     # Handle microclustering for large datasets
@@ -503,6 +516,8 @@ def run_analysis(args: argparse.Namespace) -> int:
         "beta": config.beta,
         "lambda_penalty": config.lambda_penalty,
         "n_neighbors": config.n_neighbors,
+        "n_processes": config.n_processes,
+        "batch_size": config.batch_size,
         "microcluster": args.microcluster,
         "cells_per_cluster": args.cells_per_cluster if args.microcluster else None,
         "n_cells": adata.n_obs,

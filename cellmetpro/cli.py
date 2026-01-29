@@ -357,6 +357,11 @@ Examples:
         help="GO namespace for GO enrichment (default: biological_process)",
     )
     pathway_parser.add_argument(
+        "--go-annotations",
+        type=Path,
+        help="GO annotations file (GAF format) for GO enrichment",
+    )
+    pathway_parser.add_argument(
         "--fdr-threshold",
         type=float,
         default=0.05,
@@ -805,7 +810,11 @@ def run_pathway(args: argparse.Namespace) -> int:
     """
     import pandas as pd
 
-    from cellmetpro.analysis.pathway import subsystem_enrichment
+    from cellmetpro.analysis.pathway import (
+        GOEnrichmentAnalyzer,
+        load_go_annotations_from_gaf,
+        subsystem_enrichment,
+    )
     from cellmetpro.models import get_subsystem_reactions, load_gem
 
     logger.info("CellMetPro Pathway Enrichment Analysis")
@@ -878,30 +887,65 @@ def run_pathway(args: argparse.Namespace) -> int:
     else:  # GO enrichment
         logger.info("Running GO term enrichment...")
 
-        # GO enrichment requires GO annotations
-        # Check if there's a GAF file available or warn the user
-        logger.warning(
-            "GO enrichment requires GO annotations file. "
-            "Please provide a GAF file using --go-annotations flag "
-            "(not yet implemented). Falling back to subsystem enrichment."
-        )
+        # Check if GO annotations file is provided
+        if args.go_annotations is None:
+            logger.warning(
+                "GO enrichment requires GO annotations file. "
+                "Please provide a GAF file using --go-annotations flag. "
+                "Falling back to subsystem enrichment."
+            )
 
-        # Fallback to subsystem enrichment
-        subsystem_mapping = get_subsystem_reactions(model)
-        result = subsystem_enrichment(
-            significant_reactions=reactions,
-            background=background,
-            subsystem_mapping=subsystem_mapping,
-        )
+            # Fallback to subsystem enrichment
+            subsystem_mapping = get_subsystem_reactions(model)
+            result = subsystem_enrichment(
+                significant_reactions=reactions,
+                background=background,
+                subsystem_mapping=subsystem_mapping,
+            )
 
-        if len(result) > 0 and "padj" in result.columns:
-            significant = result[result["padj"] < args.fdr_threshold]
-            fdr = args.fdr_threshold
-            logger.info(f"Significant subsystems (FDR < {fdr}): {len(significant)}")
+            if len(result) > 0 and "padj" in result.columns:
+                n_sig = (result["padj"] < args.fdr_threshold).sum()
+                fdr = args.fdr_threshold
+                logger.info(f"Significant subsystems (FDR < {fdr}): {n_sig}")
 
-        # Save results
-        result.to_csv(args.output / "subsystem_enrichment.csv", index=False)
-        logger.info(f"Results saved to {args.output / 'subsystem_enrichment.csv'}")
+            result.to_csv(args.output / "subsystem_enrichment.csv", index=False)
+            logger.info(
+                f"Results saved to {args.output / 'subsystem_enrichment.csv'}"
+            )
+        else:
+            # Load GO annotations from GAF file
+            logger.info(f"Loading GO annotations from {args.go_annotations}")
+            go_annotations = load_go_annotations_from_gaf(str(args.go_annotations))
+            logger.info(f"Loaded {len(go_annotations)} GO annotations")
+
+            # Create GO enrichment analyzer
+            analyzer = GOEnrichmentAnalyzer(model, go_annotations)
+
+            # Map namespace argument to GO namespace codes
+            namespace_map = {
+                "biological_process": "BP",
+                "molecular_function": "MF",
+                "cellular_component": "CC",
+                "all": None,
+            }
+            namespace = namespace_map.get(args.namespace)
+
+            # Run GO enrichment
+            result = analyzer.enrich_reactions(
+                significant_reactions=set(reactions),
+                background_reactions=set(background),
+                namespace=namespace,
+            )
+
+            if len(result) > 0 and "padj" in result.columns:
+                n_sig = (result["padj"] < args.fdr_threshold).sum()
+                fdr = args.fdr_threshold
+                logger.info(f"Significant GO terms (FDR < {fdr}): {n_sig}")
+            else:
+                logger.info("No enriched GO terms found")
+
+            result.to_csv(args.output / "go_enrichment.csv", index=False)
+            logger.info(f"Results saved to {args.output / 'go_enrichment.csv'}")
 
     # Generate plot if requested
     if args.plot and len(result) > 0:

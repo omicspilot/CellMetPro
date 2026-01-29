@@ -398,6 +398,34 @@ class TestPathwayCommand:
             ])
             assert args.namespace == ns
 
+    def test_pathway_go_annotations_arg(self):
+        """Test pathway command with GO annotations file."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "pathway", "reactions.csv",
+            "--method", "go",
+            "--go-annotations", "annotations.gaf",
+        ])
+
+        assert args.method == "go"
+        assert args.go_annotations == Path("annotations.gaf")
+
+    def test_pathway_go_annotations_default_none(self):
+        """Test pathway command GO annotations default to None."""
+        from cellmetpro.cli import create_parser
+
+        parser = create_parser()
+
+        args = parser.parse_args([
+            "pathway", "reactions.txt",
+            "--method", "subsystem",
+        ])
+
+        assert args.go_annotations is None
+
 
 class TestDifferentialIntegration:
     """Integration tests for differential command."""
@@ -549,6 +577,133 @@ class TestClusterIntegration:
         exit_code = main([
             "cluster",
             str(tmp_path / "nonexistent.csv"),
+            "-o", str(tmp_path / "output"),
+        ])
+        assert exit_code == 1
+
+
+class TestPathwayIntegration:
+    """Integration tests for pathway command."""
+
+    @pytest.fixture
+    def mock_reactions_file(self, tmp_path):
+        """Create mock reactions file."""
+        reactions = ["R1", "R2", "R3", "R4", "R5"]
+        path = tmp_path / "reactions.txt"
+        with open(path, "w") as f:
+            for rxn in reactions:
+                f.write(f"{rxn}\n")
+        return path
+
+    @pytest.fixture
+    def mock_gaf_file(self, tmp_path):
+        """Create mock GAF file with GO annotations.
+
+        GAF 2.2 format columns (tab-separated):
+        0: DB, 1: DB_Object_ID, 2: DB_Object_Symbol, 3: Qualifier,
+        4: GO_ID, 5: DB:Reference, 6: Evidence_Code, 7: With/From,
+        8: Aspect, 9: DB_Object_Name, 10: DB_Object_Synonym,
+        11: DB_Object_Type, 12: Taxon, 13: Date, 14: Assigned_By
+        """
+        lines = [
+            "!gaf-version: 2.2",
+            "!generated-by: test",
+            # Proper 15-column GAF format
+            "\t".join([
+                "UniProtKB", "A0A001", "gene1", "",
+                "GO:0006096", "PMID:123", "IEA", "",
+                "P", "Gene 1", "G1", "protein", "taxon:9606", "20200101", "Test"
+            ]),
+            "\t".join([
+                "UniProtKB", "A0A001", "gene1", "",
+                "GO:0005737", "PMID:123", "IEA", "",
+                "C", "Gene 1", "G1", "protein", "taxon:9606", "20200101", "Test"
+            ]),
+            "\t".join([
+                "UniProtKB", "A0A002", "gene2", "",
+                "GO:0006096", "PMID:456", "IEA", "",
+                "P", "Gene 2", "G2", "protein", "taxon:9606", "20200101", "Test"
+            ]),
+            "\t".join([
+                "UniProtKB", "A0A003", "gene3", "",
+                "GO:0006099", "PMID:789", "IEA", "",
+                "P", "Gene 3", "G3", "protein", "taxon:9606", "20200101", "Test"
+            ]),
+        ]
+        path = tmp_path / "annotations.gaf"
+        with open(path, "w") as f:
+            f.write("\n".join(lines))
+        return path
+
+    def test_pathway_subsystem_integration(
+        self, mock_reactions_file, tmp_model_json, tmp_path
+    ):
+        """Test pathway command with subsystem enrichment."""
+        from cellmetpro.cli import main
+
+        output_dir = tmp_path / "pathway_output"
+
+        exit_code = main([
+            "pathway",
+            str(mock_reactions_file),
+            "-o", str(output_dir),
+            "--model", str(tmp_model_json),
+            "--method", "subsystem",
+        ])
+
+        assert exit_code == 0
+        assert output_dir.exists()
+        assert (output_dir / "subsystem_enrichment.csv").exists()
+
+    def test_pathway_go_without_annotations(
+        self, mock_reactions_file, tmp_model_json, tmp_path
+    ):
+        """Test pathway GO command falls back without annotations file."""
+        from cellmetpro.cli import main
+
+        output_dir = tmp_path / "pathway_output"
+
+        exit_code = main([
+            "pathway",
+            str(mock_reactions_file),
+            "-o", str(output_dir),
+            "--model", str(tmp_model_json),
+            "--method", "go",
+        ])
+
+        # Should succeed but fall back to subsystem
+        assert exit_code == 0
+        assert output_dir.exists()
+        assert (output_dir / "subsystem_enrichment.csv").exists()
+
+    def test_pathway_go_with_annotations(
+        self, mock_reactions_file, mock_gaf_file, tmp_model_json, tmp_path
+    ):
+        """Test pathway GO command with annotations file."""
+        from cellmetpro.cli import main
+
+        output_dir = tmp_path / "pathway_output"
+
+        exit_code = main([
+            "pathway",
+            str(mock_reactions_file),
+            "-o", str(output_dir),
+            "--model", str(tmp_model_json),
+            "--method", "go",
+            "--go-annotations", str(mock_gaf_file),
+        ])
+
+        assert exit_code == 0
+        assert output_dir.exists()
+        assert (output_dir / "go_enrichment.csv").exists()
+
+    def test_pathway_missing_file(self, tmp_path):
+        """Test pathway command with missing file."""
+        from cellmetpro.cli import main
+
+        exit_code = main([
+            "pathway",
+            str(tmp_path / "nonexistent.txt"),
             "-o", str(tmp_path / "output"),
         ])
         assert exit_code == 1

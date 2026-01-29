@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Callable, Literal
 
 import numpy as np
 import pandas as pd
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from scipy.sparse import issparse
 
 if TYPE_CHECKING:
@@ -74,6 +75,8 @@ class CompassConfig:
         large datasets as max flux is cell-independent).
     precompute_gpr : bool
         Whether to pre-parse GPR rules for faster evaluation.
+    show_progress : bool
+        Whether to show progress bars for long-running operations.
     """
 
     beta: float = BETA
@@ -87,6 +90,7 @@ class CompassConfig:
     batch_size: int = 100
     cache_max_fluxes: bool = True
     precompute_gpr: bool = True
+    show_progress: bool = True
 
 
 class ParsedGPR:
@@ -510,25 +514,51 @@ class CompassScorer:
         """
         result = {}
 
-        for rxn in reactions:
-            if rxn.id in self._parsed_gprs:
-                parsed = self._parsed_gprs[rxn.id]
-                values = parsed.evaluate(
-                    expr_array, self._gene_to_idx, and_func, or_func
+        if self.config.show_progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                transient=True,
+            ) as progress:
+                task = progress.add_task(
+                    "Evaluating GPR rules...", total=len(reactions)
                 )
-                result[rxn.id] = values
-
-                # Track missing genes
-                for gene in parsed.genes:
-                    if gene not in self._gene_to_idx:
-                        self._missing_genes.add(gene)
-            else:
-                # Fallback for non-precomputed
-                result[rxn.id] = self._evaluate_gpr(
-                    rxn.gene_reaction_rule, self._expression_upper
-                )
+                for rxn in reactions:
+                    self._evaluate_single_gpr(rxn, expr_array, and_func, or_func, result)
+                    progress.update(task, advance=1)
+        else:
+            for rxn in reactions:
+                self._evaluate_single_gpr(rxn, expr_array, and_func, or_func, result)
 
         return result
+
+    def _evaluate_single_gpr(
+        self,
+        rxn,
+        expr_array: np.ndarray,
+        and_func: Callable,
+        or_func: Callable,
+        result: dict[str, np.ndarray],
+    ) -> None:
+        """Evaluate GPR for a single reaction and store in result dict."""
+        if rxn.id in self._parsed_gprs:
+            parsed = self._parsed_gprs[rxn.id]
+            values = parsed.evaluate(
+                expr_array, self._gene_to_idx, and_func, or_func
+            )
+            result[rxn.id] = values
+
+            # Track missing genes
+            for gene in parsed.genes:
+                if gene not in self._gene_to_idx:
+                    self._missing_genes.add(gene)
+        else:
+            # Fallback for non-precomputed
+            result[rxn.id] = self._evaluate_gpr(
+                rxn.gene_reaction_rule, self._expression_upper
+            )
 
     def _expression_to_penalty_optimized(
         self, expression: pd.DataFrame
@@ -829,20 +859,43 @@ class CompassScorer:
             scores = self._optimize_parallel(model, penalties, internal_reactions)
         else:
             # Sequential processing with batching
-            for batch_start in range(0, n_cells, batch_size):
-                batch_end = min(batch_start + batch_size, n_cells)
-                batch_cells = self.cell_names[batch_start:batch_end]
-
-                logger.info(
-                    f"Processing cells {batch_start + 1}-{batch_end}/{n_cells}"
-                )
-
-                for cell_name in batch_cells:
-                    cell_penalties = penalties[cell_name]
-                    cell_scores = self._optimize_single_cell_fast(
-                        model, cell_penalties, internal_reactions
+            if self.config.show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task(
+                        "Optimizing cells...", total=n_cells
                     )
-                    scores[cell_name] = cell_scores
+                    for batch_start in range(0, n_cells, batch_size):
+                        batch_end = min(batch_start + batch_size, n_cells)
+                        batch_cells = self.cell_names[batch_start:batch_end]
+
+                        for cell_name in batch_cells:
+                            cell_penalties = penalties[cell_name]
+                            cell_scores = self._optimize_single_cell_fast(
+                                model, cell_penalties, internal_reactions
+                            )
+                            scores[cell_name] = cell_scores
+                            progress.update(task, advance=1)
+            else:
+                for batch_start in range(0, n_cells, batch_size):
+                    batch_end = min(batch_start + batch_size, n_cells)
+                    batch_cells = self.cell_names[batch_start:batch_end]
+
+                    logger.info(
+                        f"Processing cells {batch_start + 1}-{batch_end}/{n_cells}"
+                    )
+
+                    for cell_name in batch_cells:
+                        cell_penalties = penalties[cell_name]
+                        cell_scores = self._optimize_single_cell_fast(
+                            model, cell_penalties, internal_reactions
+                        )
+                        scores[cell_name] = cell_scores
 
         scores_df = pd.DataFrame(scores)
         logger.info("COMPASS optimization complete")
@@ -866,7 +919,7 @@ class CompassScorer:
         """
         model = model.copy()
 
-        for rxn_id in reaction_ids:
+        def compute_max_flux(rxn_id: str) -> None:
             try:
                 rxn = model.reactions.get_by_id(rxn_id)
                 model.objective = rxn
@@ -880,6 +933,24 @@ class CompassScorer:
                         self._max_flux_cache[rxn_id] = 0.0
             except Exception:
                 self._max_flux_cache[rxn_id] = 0.0
+
+        if self.config.show_progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                transient=True,
+            ) as progress:
+                task = progress.add_task(
+                    "Computing max fluxes...", total=len(reaction_ids)
+                )
+                for rxn_id in reaction_ids:
+                    compute_max_flux(rxn_id)
+                    progress.update(task, advance=1)
+        else:
+            for rxn_id in reaction_ids:
+                compute_max_flux(rxn_id)
 
     def _optimize_single_cell_fast(
         self,
@@ -1095,18 +1166,41 @@ class CompassScorer:
                 )
                 futures[future] = batch_cells
 
-            completed = 0
-            for future in as_completed(futures):
-                batch_cells = futures[future]
-                completed += len(batch_cells)
-                try:
-                    batch_scores = future.result()
-                    scores.update(batch_scores)
-                    logger.info(f"Completed {completed}/{n_cells} cells")
-                except Exception as e:
-                    logger.error(f"Error processing batch: {e}")
-                    for cell in batch_cells:
-                        scores[cell] = {rxn: 1.0 for rxn in reaction_ids}
+            if self.config.show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task(
+                        "Optimizing cells (parallel)...", total=n_cells
+                    )
+                    for future in as_completed(futures):
+                        batch_cells = futures[future]
+                        try:
+                            batch_scores = future.result()
+                            scores.update(batch_scores)
+                            progress.update(task, advance=len(batch_cells))
+                        except Exception as e:
+                            logger.error(f"Error processing batch: {e}")
+                            for cell in batch_cells:
+                                scores[cell] = {rxn: 1.0 for rxn in reaction_ids}
+                            progress.update(task, advance=len(batch_cells))
+            else:
+                completed = 0
+                for future in as_completed(futures):
+                    batch_cells = futures[future]
+                    completed += len(batch_cells)
+                    try:
+                        batch_scores = future.result()
+                        scores.update(batch_scores)
+                        logger.info(f"Completed {completed}/{n_cells} cells")
+                    except Exception as e:
+                        logger.error(f"Error processing batch: {e}")
+                        for cell in batch_cells:
+                            scores[cell] = {rxn: 1.0 for rxn in reaction_ids}
 
         return scores
 

@@ -281,6 +281,7 @@ class TestCompassConfig:
         assert config.lambda_penalty == 0.0
         assert config.n_neighbors == 30
         assert config.n_processes == 1
+        assert config.show_progress is True
 
     def test_custom_config(self):
         """Test custom configuration."""
@@ -290,11 +291,13 @@ class TestCompassConfig:
             beta=0.9,
             lambda_penalty=0.5,
             n_processes=4,
+            show_progress=False,
         )
 
         assert config.beta == 0.9
         assert config.lambda_penalty == 0.5
         assert config.n_processes == 4
+        assert config.show_progress is False
 
 
 # ============================================================================

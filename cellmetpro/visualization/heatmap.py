@@ -118,7 +118,7 @@ def plot_pathway_heatmap(
     if save:
         g.savefig(save, dpi=150, bbox_inches="tight")
 
-    return g.fig
+    return g.fig  # type: ignore[no-any-return]
 
 
 def plot_reaction_heatmap(
@@ -256,7 +256,7 @@ def plot_reaction_heatmap(
     if save:
         g.savefig(save, dpi=150, bbox_inches="tight")
 
-    return g.fig
+    return g.fig  # type: ignore[no-any-return]
 
 
 def plot_grouped_heatmap(
@@ -437,4 +437,4 @@ def plot_correlation_heatmap(
     if save:
         g.savefig(save, dpi=150, bbox_inches="tight")
 
-    return g.fig
+    return g.fig  # type: ignore[no-any-return]

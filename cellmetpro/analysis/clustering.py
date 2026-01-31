@@ -313,7 +313,7 @@ class MetabolicClustering:
             n_clusters = min(10, max(2, data.shape[0] // 50))
 
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        return kmeans.fit_predict(data)
+        return np.asarray(kmeans.fit_predict(data))
 
     def _cluster_graph(
         self,
@@ -384,7 +384,7 @@ class MetabolicClustering:
             batch_size=min(1024, data.shape[0]),
             n_init=10,
         )
-        return kmeans.fit_predict(data)
+        return np.asarray(kmeans.fit_predict(data))
 
     def _cluster_hierarchical(
         self,
@@ -400,7 +400,7 @@ class MetabolicClustering:
             n_clusters=n_clusters,
             linkage=linkage,
         )
-        return clustering.fit_predict(data)
+        return np.asarray(clustering.fit_predict(data))
 
     def _cluster_spectral(
         self,
@@ -421,7 +421,7 @@ class MetabolicClustering:
             n_neighbors=n_neighbors,
             random_state=42,
         )
-        return clustering.fit_predict(data)
+        return np.asarray(clustering.fit_predict(data))
 
     def _cluster_dbscan(
         self,
@@ -448,14 +448,14 @@ class MetabolicClustering:
             min_samples=min_samples,
             metric="euclidean",
         )
-        labels = clustering.fit_predict(data)
+        labels: np.ndarray = clustering.fit_predict(data)
 
         # Relabel noise points (-1) to a separate cluster for consistency
         if -1 in labels:
             max_label = labels.max()
             labels[labels == -1] = max_label + 1
 
-        return labels
+        return np.asarray(labels)
 
     def _cluster_hdbscan(
         self,
@@ -481,14 +481,14 @@ class MetabolicClustering:
             min_samples=min_samples,
             metric="euclidean",
         )
-        labels = clustering.fit_predict(data)
+        labels: np.ndarray = clustering.fit_predict(data)
 
         # Relabel noise points (-1) to a separate cluster
         if -1 in labels:
             max_label = labels.max()
             labels[labels == -1] = max_label + 1
 
-        return labels
+        return np.asarray(labels)
 
     def get_cluster_markers(
         self,
@@ -549,7 +549,7 @@ class MetabolicClustering:
         pd.DataFrame
             DataFrame with cell_id, cluster, and embedding columns.
         """
-        data = {"cell_id": self.cell_ids}
+        data: dict[str, list | np.ndarray] = {"cell_id": self.cell_ids}
 
         if self.labels is not None:
             data["cluster"] = self.labels
@@ -801,7 +801,7 @@ def benchmark_clustering_methods(
     if methods is None:
         methods = ["kmeans", "hierarchical", "spectral"]
 
-    results = []
+    results: list[dict[str, str | float | int]] = []
 
     for method in methods:
         try:
@@ -812,8 +812,10 @@ def benchmark_clustering_methods(
             mc._data = data  # Set the data directly
             mc.pca_components = data  # Use data as PCA components
 
-            labels = mc.cluster(method=method, use_pca=True)
-            metrics = evaluate_clustering(data, labels)
+            labels = mc.cluster(method=method, use_pca=True)  # type: ignore[arg-type]
+            metrics: dict[str, str | float | int] = dict(
+                evaluate_clustering(data, labels)
+            )
             metrics["method"] = method
             results.append(metrics)
         except (ImportError, ValueError) as e:
@@ -821,9 +823,9 @@ def benchmark_clustering_methods(
             results.append(
                 {
                     "method": method,
-                    "silhouette": np.nan,
-                    "calinski_harabasz": np.nan,
-                    "davies_bouldin": np.nan,
+                    "silhouette": float("nan"),
+                    "calinski_harabasz": float("nan"),
+                    "davies_bouldin": float("nan"),
                     "n_clusters": 0,
                     "error": str(e),
                 }

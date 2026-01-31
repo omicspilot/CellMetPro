@@ -449,8 +449,8 @@ class DifferentialAnalysis:
         from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
         # Prepare data for statsmodels
-        all_values = []
-        all_groups = []
+        all_values: list[float] = []
+        all_groups: list[str] = []
         for g in groups:
             all_values.extend(group_data[g])
             all_groups.extend([g] * len(group_data[g]))

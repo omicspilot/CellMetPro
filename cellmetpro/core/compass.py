@@ -242,7 +242,7 @@ class ParsedGPR:
         if isinstance(tree, str):
             # Base case: gene name
             if tree in gene_to_idx:
-                return expr[gene_to_idx[tree]]
+                return np.asarray(expr[gene_to_idx[tree]])
             return np.zeros(expr.shape[1])
 
         op, children = tree
@@ -254,9 +254,9 @@ class ParsedGPR:
         )
 
         if op == "OR":
-            return or_func(child_values, axis=0)
+            return np.asarray(or_func(child_values, axis=0))
         else:  # AND
-            return and_func(child_values, axis=0)
+            return np.asarray(and_func(child_values, axis=0))
 
 
 @dataclass
@@ -453,7 +453,7 @@ class CompassScorer:
         if self.config.precompute_gpr and self._parsed_gprs:
             # Use pre-parsed GPRs (faster for repeated evaluations)
             reaction_expression = self._evaluate_gprs_vectorized(
-                reactions_with_gpr, expr_array, and_func, or_func
+                reactions_with_gpr, expr_array, and_func, or_func  # type: ignore[arg-type]
             )
         else:
             # Fallback to standard evaluation
@@ -517,7 +517,7 @@ class CompassScorer:
         dict
             Mapping from reaction ID to expression values array.
         """
-        result = {}
+        result: dict[str, np.ndarray] = {}
 
         if self.config.show_progress:
             with Progress(
@@ -634,7 +634,7 @@ class CompassScorer:
 
         # Parse and evaluate the GPR rule
         return self._evaluate_gpr_recursive(
-            gpr_rule.upper(), expression, and_func, or_func
+            gpr_rule.upper(), expression, and_func, or_func  # type: ignore[arg-type]
         )
 
     def _evaluate_gpr_recursive(
@@ -672,7 +672,7 @@ class CompassScorer:
                 self._evaluate_gpr_recursive(part, expression, and_func, or_func)
                 for part in or_parts
             ]
-            return or_func(np.array(values), axis=0)
+            return np.asarray(or_func(np.array(values), axis=0))
 
         # Find top-level AND operators
         and_parts = self._split_at_operator(gpr_rule, " AND ")
@@ -681,12 +681,12 @@ class CompassScorer:
                 self._evaluate_gpr_recursive(part, expression, and_func, or_func)
                 for part in and_parts
             ]
-            return and_func(np.array(values), axis=0)
+            return np.asarray(and_func(np.array(values), axis=0))
 
         # Base case: single gene
         gene = gpr_rule.strip()
         if gene in expression.index:
-            return expression.loc[gene].values.astype(float)
+            return np.asarray(expression.loc[gene].values.astype(float))
         else:
             # Gene not found - track and return zeros
             self._missing_genes.add(gene)

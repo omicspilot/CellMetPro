@@ -113,8 +113,8 @@ def plot_reaction_violin(
     n_groups = len(group_labels.unique())
     if figsize is None:
         if orient == "v":
-            width = max(8, min(20, n_reactions * n_groups * 0.5 + 2))
-            height = 6
+            width: float = max(8, min(20, n_reactions * n_groups * 0.5 + 2))
+            height: float = 6
         else:
             width = 10
             height = max(6, min(15, n_reactions * 0.8 + 2))
@@ -273,8 +273,8 @@ def plot_reaction_boxplot(
     n_groups = len(group_labels.unique())
     if figsize is None:
         if orient == "v":
-            width = max(8, min(20, n_reactions * n_groups * 0.4 + 2))
-            height = 6
+            width: float = max(8, min(20, n_reactions * n_groups * 0.4 + 2))
+            height: float = 6
         else:
             width = 10
             height = max(6, min(15, n_reactions * 0.6 + 2))

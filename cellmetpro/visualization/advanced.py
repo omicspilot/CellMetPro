@@ -343,7 +343,7 @@ def plot_ridge(
     if save:
         g.savefig(save, dpi=150, bbox_inches="tight")
 
-    return g.figure
+    return g.figure  # type: ignore[no-any-return]
 
 
 def plot_radar(

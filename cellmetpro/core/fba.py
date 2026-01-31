@@ -255,6 +255,8 @@ class FluxBalanceAnalyzer:
         if self.solution is None:
             self.optimize()
 
+        # After optimize(), solution is guaranteed to exist
+        assert self.solution is not None
         exchange_ids = [rxn.id for rxn in self.model.exchanges]
         return self.solution.fluxes[exchange_ids]
 
@@ -337,7 +339,7 @@ def compute_yield(
         solution = model.optimize()
 
         if solution.status == "optimal":
-            product_flux = solution.fluxes[product_reaction]
+            product_flux = float(solution.fluxes[product_reaction])
             return product_flux / substrate_uptake
         else:
             return 0.0

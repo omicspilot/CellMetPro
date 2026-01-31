@@ -122,7 +122,8 @@ class CompassCache:
         if path.exists():
             with open(path, "rb") as f:
                 logger.debug(f"Loading max fluxes from cache: {path}")
-                return pickle.load(f)
+                data: dict[str, float] = pickle.load(f)
+                return data
         return None
 
     def save_reaction_scores(
@@ -227,7 +228,8 @@ class CompassCache:
         path = self._get_path(key, suffix=".json")
         if path.exists():
             with open(path) as f:
-                return json.load(f)
+                data: dict = json.load(f)
+                return data
         return None
 
     def has_sample(self, sample_id: str) -> bool:

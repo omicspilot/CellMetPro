@@ -146,8 +146,8 @@ def load_sample_expression(
     # Generate cell names with cluster prefixes
     n_clusters = 4
     cells_per_cluster = n_cells // n_clusters
-    cells = []
-    cell_types = []
+    cells: list[str] = []
+    cell_types: list[str] = []
     for i in range(n_clusters):
         cluster_name = ["Proliferating", "Quiescent", "Hypoxic", "Oxidative"][i]
         n = cells_per_cluster if i < n_clusters - 1 else n_cells - len(cells)
@@ -199,7 +199,7 @@ def load_sample_expression(
     expression[dropout_mask] = 0
 
     # Round to integers and ensure non-negative
-    expression = np.maximum(0, np.round(expression)).astype(float)
+    expression = np.maximum(0, np.round(expression)).astype(float)  # type: ignore[assignment]
 
     return pd.DataFrame(expression, index=genes, columns=cells)
 
@@ -238,8 +238,8 @@ def load_sample_groups(
     # Generate matching cell names
     n_clusters = 4
     cells_per_cluster = n_cells // n_clusters
-    cells = []
-    cell_types = []
+    cells: list[str] = []
+    cell_types: list[str] = []
     cluster_names = ["Proliferating", "Quiescent", "Hypoxic", "Oxidative"]
 
     for i in range(n_clusters):

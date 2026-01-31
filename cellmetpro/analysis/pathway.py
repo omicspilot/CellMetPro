@@ -6,6 +6,7 @@ and provides pathway enrichment analysis using Gene Ontology (GO) terms.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -84,7 +85,7 @@ class PathwayAnalyzer:
         if self.pathway_mapping is None:
             self.get_pathway_mapping()
 
-        agg_funcs = {
+        agg_funcs: dict[str, Callable[..., np.ndarray]] = {
             "mean": np.mean,
             "median": np.median,
             "sum": np.sum,
@@ -93,6 +94,7 @@ class PathwayAnalyzer:
         agg_func = agg_funcs[method]
 
         results = {}
+        assert self.pathway_mapping is not None
         for pathway, reactions in self.pathway_mapping.items():
             # Get reactions that exist in our scores
             available_reactions = [
@@ -153,6 +155,7 @@ class PathwayAnalyzer:
         """Over-Representation Analysis using Fisher's exact test."""
         results = []
 
+        assert self.pathway_mapping is not None
         for pathway, reactions in self.pathway_mapping.items():
             pathway_reactions = set(reactions) & background
 

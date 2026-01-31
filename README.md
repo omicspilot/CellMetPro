@@ -36,6 +36,42 @@ pip install -e ".[dev]"
 
 ---
 
+## Sample Data
+
+CellMetPro includes sample datasets for testing:
+
+```python
+from cellmetpro.data import (
+    load_sample_expression,
+    load_sample_groups,
+    load_sample_reaction_scores,
+    create_sample_model,
+)
+
+# Load synthetic expression data (50 genes x 100 cells)
+expression = load_sample_expression()
+print(f"Expression: {expression.shape}")
+
+# Load matching group annotations
+groups = load_sample_groups()
+print(f"Cell types: {groups['cell_type'].unique()}")
+
+# Load pre-computed reaction scores for quick visualization
+scores = load_sample_reaction_scores()
+
+# Create a simple metabolic model for testing
+model = create_sample_model()
+print(f"Model reactions: {len(model.reactions)}")
+```
+
+The sample data includes:
+- **Expression matrix**: 50 metabolic genes x 100 cells with 4 cell types (Proliferating, Quiescent, Hypoxic, Oxidative)
+- **Group annotations**: Cell type and treatment labels
+- **Reaction scores**: Pre-computed scores for differential analysis and visualization
+- **Sample model**: Minimal glycolysis model with GPR rules
+
+---
+
 ## Quick Start
 
 ### Command Line

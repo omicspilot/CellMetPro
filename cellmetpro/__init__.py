@@ -8,6 +8,6 @@ Genome-Scale Metabolic Models (GEMs).
 __version__ = "0.1.0"
 __author__ = "Oumar Ndiaye"
 
-from . import analysis, core, visualization
+from . import analysis, core, data, visualization
 
-__all__ = ["core", "analysis", "visualization"]
+__all__ = ["core", "analysis", "visualization", "data"]

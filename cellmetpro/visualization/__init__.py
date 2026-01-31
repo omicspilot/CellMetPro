@@ -25,6 +25,20 @@ from .heatmap import (
     plot_pathway_heatmap,
     plot_reaction_heatmap,
 )
+
+# Interactive Plotly visualizations
+from .interactive import (
+    plot_box_interactive,
+    plot_dotplot_interactive,
+    plot_embedding_interactive,
+    plot_enrichment_interactive,
+    plot_feature_expression_interactive,
+    plot_heatmap_interactive,
+    plot_tsne_interactive,
+    plot_umap_interactive,
+    plot_violin_interactive,
+    plot_volcano_interactive,
+)
 from .umap import (
     plot_embedding,
     plot_feature_on_embedding,
@@ -72,4 +86,15 @@ __all__ = [
     "plot_radar",
     "plot_waterfall",
     "plot_subsystem_waterfall",
+    # Interactive Plotly plots
+    "plot_volcano_interactive",
+    "plot_embedding_interactive",
+    "plot_umap_interactive",
+    "plot_tsne_interactive",
+    "plot_heatmap_interactive",
+    "plot_dotplot_interactive",
+    "plot_violin_interactive",
+    "plot_box_interactive",
+    "plot_enrichment_interactive",
+    "plot_feature_expression_interactive",
 ]

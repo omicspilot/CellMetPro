@@ -791,3 +791,218 @@ def test_plot_radar_constant_reactions(reaction_scores, groups):
     ax = plot_radar(scores, groups, reactions=reactions)
     assert isinstance(ax, plt.Axes)
     plt.close()
+
+
+# =============================================================================
+# TESTS FOR INTERACTIVE PLOTS (PLOTLY)
+# =============================================================================
+
+
+class TestInteractiveVolcano:
+    """Tests for interactive volcano plot."""
+
+    def test_plot_volcano_interactive_returns_figure(self, differential_results):
+        """Test that plot_volcano_interactive returns a Plotly figure."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_volcano_interactive
+
+        fig = plot_volcano_interactive(differential_results)
+        assert isinstance(fig, Figure)
+
+    def test_plot_volcano_interactive_custom_thresholds(self, differential_results):
+        """Test interactive volcano with custom thresholds."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_volcano_interactive
+
+        fig = plot_volcano_interactive(
+            differential_results,
+            log2fc_threshold=1.0,
+            pvalue_threshold=0.01,
+        )
+        assert isinstance(fig, Figure)
+
+
+class TestInteractiveEmbedding:
+    """Tests for interactive embedding plots."""
+
+    def test_plot_embedding_interactive_returns_figure(self, embedding):
+        """Test that plot_embedding_interactive returns a Plotly figure."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_embedding_interactive
+
+        fig = plot_embedding_interactive(embedding)
+        assert isinstance(fig, Figure)
+
+    def test_plot_embedding_interactive_with_color(self, embedding):
+        """Test interactive embedding with color values."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_embedding_interactive
+
+        color = np.random.rand(len(embedding))
+        fig = plot_embedding_interactive(embedding, color=color)
+        assert isinstance(fig, Figure)
+
+    def test_plot_embedding_interactive_with_categorical(self, embedding):
+        """Test interactive embedding with categorical colors."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_embedding_interactive
+
+        color = pd.Series(["A"] * 50 + ["B"] * 50)
+        fig = plot_embedding_interactive(embedding, color=color)
+        assert isinstance(fig, Figure)
+
+    def test_plot_umap_interactive(self, embedding):
+        """Test plot_umap_interactive wrapper."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_umap_interactive
+
+        fig = plot_umap_interactive(embedding)
+        assert isinstance(fig, Figure)
+
+    def test_plot_tsne_interactive(self, embedding):
+        """Test plot_tsne_interactive wrapper."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_tsne_interactive
+
+        fig = plot_tsne_interactive(embedding)
+        assert isinstance(fig, Figure)
+
+
+class TestInteractiveHeatmap:
+    """Tests for interactive heatmap."""
+
+    def test_plot_heatmap_interactive_returns_figure(self, reaction_scores):
+        """Test that plot_heatmap_interactive returns a Plotly figure."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_heatmap_interactive
+
+        fig = plot_heatmap_interactive(reaction_scores)
+        assert isinstance(fig, Figure)
+
+    def test_plot_heatmap_interactive_with_clustering(self, reaction_scores):
+        """Test interactive heatmap with clustering."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_heatmap_interactive
+
+        fig = plot_heatmap_interactive(
+            reaction_scores, cluster_rows=True, cluster_cols=True
+        )
+        assert isinstance(fig, Figure)
+
+
+class TestInteractiveDotplot:
+    """Tests for interactive dotplot."""
+
+    def test_plot_dotplot_interactive_returns_figure(self, reaction_scores, groups):
+        """Test that plot_dotplot_interactive returns a Plotly figure."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_dotplot_interactive
+
+        fig = plot_dotplot_interactive(reaction_scores, groups)
+        assert isinstance(fig, Figure)
+
+    def test_plot_dotplot_interactive_subset_reactions(self, reaction_scores, groups):
+        """Test interactive dotplot with subset of reactions."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_dotplot_interactive
+
+        reactions = ["R0", "R1", "R2", "R3", "R4"]
+        fig = plot_dotplot_interactive(reaction_scores, groups, reactions=reactions)
+        assert isinstance(fig, Figure)
+
+
+class TestInteractiveViolin:
+    """Tests for interactive violin and box plots."""
+
+    def test_plot_violin_interactive_returns_figure(self, reaction_scores, groups):
+        """Test that plot_violin_interactive returns a Plotly figure."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_violin_interactive
+
+        fig = plot_violin_interactive(reaction_scores, groups)
+        assert isinstance(fig, Figure)
+
+    def test_plot_violin_interactive_with_points(self, reaction_scores, groups):
+        """Test interactive violin with data points."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_violin_interactive
+
+        fig = plot_violin_interactive(reaction_scores, groups, show_points=True)
+        assert isinstance(fig, Figure)
+
+    def test_plot_box_interactive_returns_figure(self, reaction_scores, groups):
+        """Test that plot_box_interactive returns a Plotly figure."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_box_interactive
+
+        fig = plot_box_interactive(reaction_scores, groups)
+        assert isinstance(fig, Figure)
+
+
+class TestInteractiveEnrichment:
+    """Tests for interactive enrichment plot."""
+
+    def test_plot_enrichment_interactive_returns_figure(self, enrichment_results):
+        """Test that plot_enrichment_interactive returns a Plotly figure."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_enrichment_interactive
+
+        fig = plot_enrichment_interactive(
+            enrichment_results,
+            term_col="go_name",
+            fold_col="fold_enrichment",
+            pvalue_col="padj",
+        )
+        assert isinstance(fig, Figure)
+
+    def test_plot_enrichment_interactive_empty_results(self):
+        """Test interactive enrichment with no significant results."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_enrichment_interactive
+
+        # Create results with no significant terms
+        results = pd.DataFrame(
+            {
+                "pathway": ["P1", "P2"],
+                "fold_enrichment": [1.5, 2.0],
+                "padj": [0.5, 0.6],  # All above threshold
+            }
+        )
+        fig = plot_enrichment_interactive(results, pvalue_threshold=0.05)
+        assert isinstance(fig, Figure)
+
+
+class TestInteractiveFeatureExpression:
+    """Tests for interactive feature expression plots."""
+
+    def test_plot_feature_expression_interactive(self, embedding, reaction_scores):
+        """Test multi-panel feature expression plot."""
+        from plotly.graph_objects import Figure
+
+        from cellmetpro.visualization import plot_feature_expression_interactive
+
+        # Ensure columns match
+        reaction_scores.columns = [f"cell_{i}" for i in range(30)]
+
+        fig = plot_feature_expression_interactive(
+            embedding[:30],  # Match size
+            reaction_scores,
+            feature_names=["R0", "R1", "R2"],
+        )
+        assert isinstance(fig, Figure)

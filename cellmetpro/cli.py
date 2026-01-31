@@ -287,6 +287,11 @@ Examples:
         action="store_true",
         help="Generate volcano plot",
     )
+    diff_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Generate interactive HTML plots (requires --plot)",
+    )
 
     # Clustering command
     cluster_parser = subparsers.add_parser(
@@ -340,6 +345,11 @@ Examples:
         "--plot",
         action="store_true",
         help="Generate embedding plot",
+    )
+    cluster_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Generate interactive HTML plots (requires --plot)",
     )
 
     # Pathway enrichment command
@@ -407,6 +417,11 @@ Examples:
         "--plot",
         action="store_true",
         help="Generate enrichment dotplot",
+    )
+    pathway_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Generate interactive HTML plots (requires --plot)",
     )
 
     return parser
@@ -720,18 +735,32 @@ def run_differential(args: argparse.Namespace) -> int:
     # Generate volcano plot if requested
     if args.plot and "log2fc" in result.columns and "padj_bh" in result.columns:
         logger.info("Generating volcano plot...")
-        import matplotlib
 
-        matplotlib.use("Agg")
-        from cellmetpro.visualization import plot_volcano
+        if args.interactive:
+            from cellmetpro.visualization import plot_volcano_interactive
 
-        plot_volcano(
-            result,
-            log2fc_threshold=args.log2fc_threshold,
-            pvalue_threshold=args.fdr_threshold,
-            save=str(args.output / "volcano_plot.png"),
-        )
-        logger.info(f"Volcano plot saved to {args.output / 'volcano_plot.png'}")
+            plot_volcano_interactive(
+                result,
+                log2fc_threshold=args.log2fc_threshold,
+                pvalue_threshold=args.fdr_threshold,
+                save=str(args.output / "volcano_plot.html"),
+            )
+            logger.info(
+                f"Interactive volcano plot saved to {args.output / 'volcano_plot.html'}"
+            )
+        else:
+            import matplotlib
+
+            matplotlib.use("Agg")
+            from cellmetpro.visualization import plot_volcano
+
+            plot_volcano(
+                result,
+                log2fc_threshold=args.log2fc_threshold,
+                pvalue_threshold=args.fdr_threshold,
+                save=str(args.output / "volcano_plot.png"),
+            )
+            logger.info(f"Volcano plot saved to {args.output / 'volcano_plot.png'}")
 
     logger.info("Differential analysis complete!")
     return 0
@@ -825,20 +854,41 @@ def run_cluster(args: argparse.Namespace) -> int:
     # Generate plot if requested
     if args.plot:
         logger.info("Generating embedding plot...")
-        import matplotlib
 
-        matplotlib.use("Agg")
-        from cellmetpro.visualization import plot_embedding
+        if args.interactive:
+            from cellmetpro.visualization import plot_embedding_interactive
 
-        plot_embedding(
-            embedding,
-            color=labels.astype(str),
-            title=f"Metabolic Clustering ({args.method})",
-            xlabel=f"{args.embedding.upper()} 1",
-            ylabel=f"{args.embedding.upper()} 2",
-            save=str(args.output / "embedding_plot.png"),
-        )
-        logger.info(f"Plot saved to {args.output / 'embedding_plot.png'}")
+            plot_embedding_interactive(
+                embedding,
+                color=labels.astype(str),
+                labels=(
+                    result_df["cell_id"].values
+                    if "cell_id" in result_df.columns
+                    else None
+                ),
+                title=f"Metabolic Clustering ({args.method})",
+                xlabel=f"{args.embedding.upper()} 1",
+                ylabel=f"{args.embedding.upper()} 2",
+                save=str(args.output / "embedding_plot.html"),
+            )
+            logger.info(
+                f"Interactive plot saved to {args.output / 'embedding_plot.html'}"
+            )
+        else:
+            import matplotlib
+
+            matplotlib.use("Agg")
+            from cellmetpro.visualization import plot_embedding
+
+            plot_embedding(
+                embedding,
+                color=labels.astype(str),
+                title=f"Metabolic Clustering ({args.method})",
+                xlabel=f"{args.embedding.upper()} 1",
+                ylabel=f"{args.embedding.upper()} 2",
+                save=str(args.output / "embedding_plot.png"),
+            )
+            logger.info(f"Plot saved to {args.output / 'embedding_plot.png'}")
 
     logger.info("Clustering analysis complete!")
     return 0
@@ -997,10 +1047,6 @@ def run_pathway(args: argparse.Namespace) -> int:
     # Generate plot if requested
     if args.plot and len(result) > 0:
         logger.info("Generating enrichment dotplot...")
-        import matplotlib
-
-        matplotlib.use("Agg")
-        from cellmetpro.visualization import plot_enrichment_dotplot
 
         # Prepare data for plotting
         if args.method == "subsystem":
@@ -1013,13 +1059,31 @@ def run_pathway(args: argparse.Namespace) -> int:
         else:
             plot_result = result
 
-        plot_enrichment_dotplot(
-            plot_result,
-            pvalue_threshold=args.fdr_threshold,
-            title=f"{'Subsystem' if args.method == 'subsystem' else 'GO'} Enrichment",
-            save=str(args.output / "enrichment_plot.png"),
-        )
-        logger.info(f"Plot saved to {args.output / 'enrichment_plot.png'}")
+        if args.interactive:
+            from cellmetpro.visualization import plot_enrichment_interactive
+
+            plot_enrichment_interactive(
+                plot_result,
+                pvalue_threshold=args.fdr_threshold,
+                title=f"{'Subsystem' if args.method == 'subsystem' else 'GO'} Enrichment",
+                save=str(args.output / "enrichment_plot.html"),
+            )
+            logger.info(
+                f"Interactive plot saved to {args.output / 'enrichment_plot.html'}"
+            )
+        else:
+            import matplotlib
+
+            matplotlib.use("Agg")
+            from cellmetpro.visualization import plot_enrichment_dotplot
+
+            plot_enrichment_dotplot(
+                plot_result,
+                pvalue_threshold=args.fdr_threshold,
+                title=f"{'Subsystem' if args.method == 'subsystem' else 'GO'} Enrichment",
+                save=str(args.output / "enrichment_plot.png"),
+            )
+            logger.info(f"Plot saved to {args.output / 'enrichment_plot.png'}")
 
     logger.info("Pathway enrichment analysis complete!")
     return 0

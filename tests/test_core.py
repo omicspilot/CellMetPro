@@ -1,5 +1,7 @@
 """Tests for core module."""
 
+import importlib.util
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -139,6 +141,58 @@ class TestDataLoader:
 
         with pytest.raises(ValueError, match="Unsupported file format"):
             loader.load()
+
+
+# ============================================================================
+# Seurat Loader Tests
+# ============================================================================
+
+
+# Check if rpy2 is available
+HAS_RPY2 = importlib.util.find_spec("rpy2") is not None
+
+
+class TestSeuratLoader:
+    """Tests for Seurat object loading."""
+
+    def test_load_seurat_import_error(self):
+        """Test that import error is raised when rpy2 not installed."""
+        from cellmetpro.core.preprocessing import load_seurat_rds
+
+        # This test verifies the error message is correct
+        # If rpy2 IS installed, it will try to load a non-existent file
+        if not HAS_RPY2:
+            with pytest.raises(ImportError, match="rpy2 is required"):
+                load_seurat_rds("fake_file.rds")
+
+    def test_load_seurat_file_not_found(self):
+        """Test that FileNotFoundError is raised for missing file."""
+        if not HAS_RPY2:
+            pytest.skip("rpy2 not installed")
+
+        from cellmetpro.core.preprocessing import load_seurat_rds
+
+        with pytest.raises(FileNotFoundError):
+            load_seurat_rds("/nonexistent/seurat_object.rds")
+
+    def test_dataloader_recognizes_rds_extension(self, tmp_path):
+        """Test that DataLoader recognizes .rds extension."""
+        from cellmetpro.core.preprocessing import DataLoader
+
+        # Create a dummy .rds file
+        rds_file = tmp_path / "test.rds"
+        rds_file.write_bytes(b"fake rds content")
+
+        loader = DataLoader(rds_file)
+
+        # Should try to load as Seurat (and fail with appropriate error)
+        if not HAS_RPY2:
+            with pytest.raises(ImportError, match="rpy2 is required"):
+                loader.load()
+        else:
+            # If rpy2 is installed, it will fail because the file is not a real RDS
+            with pytest.raises(Exception):  # RuntimeError or R error
+                loader.load()
 
 
 # ============================================================================

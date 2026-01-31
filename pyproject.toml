@@ -52,8 +52,11 @@ dev = [
 dashboard = [
     "streamlit>=1.28",
 ]
+seurat = [
+    "rpy2>=3.5",  # For loading Seurat objects from R
+]
 all = [
-    "cellmetpro[dev,dashboard]",
+    "cellmetpro[dev,dashboard,seurat]",
 ]
 
 [project.scripts]

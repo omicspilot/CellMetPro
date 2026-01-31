@@ -53,6 +53,7 @@ discover metabolic programs in your scRNA-seq data.
 Examples:
   cellmetpro run expression.h5ad -m human -o results/
   cellmetpro run data.csv -m /path/to/model.xml -o output/
+  cellmetpro run seurat.rds -m human --assay RNA --slot data -o results/
   cellmetpro run large_data.h5ad --microcluster --cells-per-cluster 100
   cellmetpro differential scores.csv groups.csv --plot
   cellmetpro cluster scores.csv --method leiden --embedding umap
@@ -85,7 +86,7 @@ Examples:
     run_parser.add_argument(
         "input",
         type=Path,
-        help="Input file (h5ad, csv, or tsv format)",
+        help="Input file (h5ad, csv, tsv, mtx, or rds format)",
     )
     run_parser.add_argument(
         "-o",
@@ -111,6 +112,21 @@ Examples:
         type=float,
         default=1e4,
         help="Target sum for normalization (default: 10000)",
+    )
+
+    # Seurat-specific options
+    run_parser.add_argument(
+        "--assay",
+        type=str,
+        default=None,
+        help="Seurat assay to extract (default: DefaultAssay). Only for .rds files.",
+    )
+    run_parser.add_argument(
+        "--slot",
+        type=str,
+        choices=["counts", "data", "scale.data"],
+        default="data",
+        help="Seurat slot to extract: counts, data, or scale.data (default: data)",
     )
 
     # COMPASS parameters
@@ -433,7 +449,13 @@ def run_analysis(args: argparse.Namespace) -> int:
     # Load expression data
     logger.info("Loading expression data...")
     loader = DataLoader(args.input)
-    adata = loader.load()
+
+    # Handle Seurat files with special options
+    if str(args.input).endswith(".rds"):
+        logger.info("Detected Seurat RDS file")
+        adata = loader.load_seurat(assay=args.assay, slot=args.slot)
+    else:
+        adata = loader.load()
     logger.info(f"Loaded {adata.n_obs} cells x {adata.n_vars} genes")
 
     # Normalize if requested

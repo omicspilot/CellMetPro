@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class DataLoader:
     """Load scRNA-seq data from various formats.
 
-    Supports loading from CSV, TSV, h5ad (AnnData), and MTX formats.
+    Supports loading from CSV, TSV, h5ad (AnnData), MTX, and Seurat RDS formats.
 
     Parameters
     ----------
@@ -38,6 +38,10 @@ class DataLoader:
     >>> loader = DataLoader("data/expression.h5ad")
     >>> adata = loader.load()
     >>> print(adata.shape)
+
+    For Seurat objects (requires R and rpy2):
+    >>> loader = DataLoader("data/seurat_object.rds")
+    >>> adata = loader.load()
     """
 
     def __init__(self, filepath: str | Path) -> None:
@@ -76,10 +80,12 @@ class DataLoader:
             self.adata = self.load_csv(sep="\t")
         elif suffix == ".mtx":
             self.adata = self.load_mtx()
+        elif suffix == ".rds":
+            self.adata = self.load_seurat()
         else:
             raise ValueError(
                 f"Unsupported file format: {suffix}. "
-                "Supported formats: .h5ad, .csv, .tsv, .txt, .mtx"
+                "Supported formats: .h5ad, .csv, .tsv, .txt, .mtx, .rds (Seurat)"
             )
 
         logger.info(
@@ -199,6 +205,241 @@ class DataLoader:
         self.adata.obs_names = pd.Index(cell_names).astype(str)
 
         return self.adata
+
+    def load_seurat(
+        self,
+        assay: str | None = None,
+        slot: str = "data",
+    ) -> ad.AnnData:
+        """Load data from Seurat RDS file.
+
+        Requires R and rpy2 to be installed. The Seurat package must be
+        installed in R.
+
+        Parameters
+        ----------
+        assay : str, optional
+            Seurat assay to extract (e.g., "RNA", "SCT"). If None, uses
+            the default assay.
+        slot : str, default="data"
+            Data slot to extract: "counts", "data", or "scale.data".
+
+        Returns
+        -------
+        anndata.AnnData
+            The loaded data.
+
+        Raises
+        ------
+        ImportError
+            If rpy2 is not installed.
+        RuntimeError
+            If R or Seurat is not available.
+
+        Notes
+        -----
+        For best compatibility, you can also export from R:
+
+        .. code-block:: r
+
+            # In R:
+            library(Seurat)
+            library(SeuratDisk)
+            SaveH5Seurat(seurat_obj, "output.h5seurat")
+            Convert("output.h5seurat", dest="h5ad")
+
+        Examples
+        --------
+        >>> loader = DataLoader("seurat_object.rds")
+        >>> adata = loader.load_seurat(assay="RNA", slot="data")
+        """
+        self.adata = load_seurat_rds(
+            self.filepath,
+            assay=assay,
+            slot=slot,
+        )
+        return self.adata
+
+
+def load_seurat_rds(
+    filepath: str | Path,
+    assay: str | None = None,
+    slot: str = "data",
+) -> ad.AnnData:
+    """Load a Seurat object from RDS file.
+
+    Converts a Seurat object to AnnData format using rpy2 to interface
+    with R. Extracts the expression matrix and cell/gene metadata.
+
+    Parameters
+    ----------
+    filepath : str or Path
+        Path to the .rds file containing the Seurat object.
+    assay : str, optional
+        Seurat assay to extract (e.g., "RNA", "SCT"). If None, uses
+        the default assay.
+    slot : str, default="data"
+        Data slot to extract:
+        - "counts": Raw counts
+        - "data": Normalized data (default)
+        - "scale.data": Scaled data
+
+    Returns
+    -------
+    anndata.AnnData
+        The converted AnnData object containing:
+        - X: Expression matrix from the specified slot
+        - obs: Cell metadata from seurat_obj@meta.data
+        - var: Gene metadata (names)
+        - obsm: Embeddings (UMAP, PCA, etc.) if present
+
+    Raises
+    ------
+    ImportError
+        If rpy2 is not installed.
+    RuntimeError
+        If R or Seurat is not available, or the file is not a valid
+        Seurat object.
+
+    Examples
+    --------
+    >>> from cellmetpro.core.preprocessing import load_seurat_rds
+    >>> adata = load_seurat_rds("pbmc3k.rds", assay="RNA", slot="data")
+    >>> print(f"Loaded {adata.n_obs} cells x {adata.n_vars} genes")
+
+    Notes
+    -----
+    Alternative: Export from R using SeuratDisk for better compatibility:
+
+    .. code-block:: r
+
+        # In R:
+        library(Seurat)
+        library(SeuratDisk)
+
+        # Load your Seurat object
+        seurat_obj <- readRDS("seurat_object.rds")
+
+        # Convert to h5ad (AnnData format)
+        SaveH5Seurat(seurat_obj, filename = "seurat.h5seurat")
+        Convert("seurat.h5seurat", dest = "h5ad")
+
+    Then load directly with AnnData:
+
+    >>> import anndata as ad
+    >>> adata = ad.read_h5ad("seurat.h5ad")
+    """
+    try:
+        import rpy2.robjects as ro
+        from rpy2.robjects import numpy2ri, pandas2ri
+        from rpy2.robjects.packages import importr
+    except ImportError:
+        raise ImportError(
+            "rpy2 is required to load Seurat objects. Install with:\n"
+            "  pip install rpy2\n\n"
+            "You also need R and Seurat installed. Alternatively, export "
+            "the Seurat object to h5ad format in R:\n"
+            "  library(SeuratDisk)\n"
+            "  SaveH5Seurat(obj, 'output.h5seurat')\n"
+            "  Convert('output.h5seurat', dest='h5ad')"
+        )
+
+    filepath = Path(filepath)
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {filepath}")
+
+    logger.info(f"Loading Seurat object from {filepath}")
+
+    # Activate automatic conversion
+    numpy2ri.activate()
+    pandas2ri.activate()
+
+    try:
+        # Import R packages
+        base = importr("base")
+
+        # Check if Seurat is installed
+        try:
+            importr("Seurat")
+        except Exception:
+            raise RuntimeError(
+                "Seurat R package is not installed. Install in R with:\n"
+                "  install.packages('Seurat')"
+            )
+
+        # Load the RDS file
+        seurat_obj = base.readRDS(str(filepath))
+
+        # Verify it's a Seurat object
+        obj_class = ro.r("class")(seurat_obj)
+        if "Seurat" not in list(obj_class):
+            raise RuntimeError(
+                f"File does not contain a Seurat object. Found: {list(obj_class)}"
+            )
+
+        # Get default assay if not specified
+        if assay is None:
+            assay = ro.r("DefaultAssay")(seurat_obj)[0]
+            logger.info(f"Using default assay: {assay}")
+
+        # Extract expression matrix
+        # GetAssayData returns a sparse matrix
+        expr_matrix = ro.r(
+            f"as.matrix(GetAssayData({seurat_obj.r_repr()}, "
+            f'assay="{assay}", slot="{slot}"))'
+        )
+
+        # Convert to numpy array
+        expr_array = np.array(expr_matrix)
+
+        # Get gene and cell names
+        gene_names = list(ro.r("rownames")(expr_matrix))
+        cell_names = list(ro.r("colnames")(expr_matrix))
+
+        # Create AnnData (transpose: Seurat is genes x cells, AnnData is cells x genes)
+        adata = ad.AnnData(expr_array.T)
+        adata.var_names = pd.Index(gene_names).astype(str)
+        adata.obs_names = pd.Index(cell_names).astype(str)
+
+        # Extract cell metadata
+        try:
+            meta_data = ro.r("as.data.frame")(seurat_obj.rx2("meta.data"))
+            meta_df = pd.DataFrame(meta_data)
+            meta_df.index = adata.obs_names
+            adata.obs = meta_df
+            logger.info(f"Loaded {len(meta_df.columns)} metadata columns")
+        except Exception as e:
+            logger.warning(f"Could not extract metadata: {e}")
+
+        # Extract embeddings (UMAP, PCA, etc.)
+        try:
+            reductions = ro.r("names")(seurat_obj.rx2("reductions"))
+            if reductions is not ro.NULL:
+                for red_name in list(reductions):
+                    try:
+                        red_data = ro.r(
+                            f"Embeddings({seurat_obj.r_repr()}, "
+                            f'reduction="{red_name}")'
+                        )
+                        red_array = np.array(red_data)
+                        adata.obsm[f"X_{red_name}"] = red_array
+                        logger.info(f"Loaded embedding: {red_name}")
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning(f"Could not extract embeddings: {e}")
+
+        logger.info(
+            f"Successfully loaded Seurat object: "
+            f"{adata.n_obs} cells x {adata.n_vars} genes"
+        )
+
+        return adata
+
+    finally:
+        # Deactivate conversions
+        numpy2ri.deactivate()
+        pandas2ri.deactivate()
 
 
 def normalize_expression(

@@ -124,8 +124,48 @@ plot_volcano(diff_results, save="volcano.png")
 | Format | Extension | Description |
 |--------|-----------|-------------|
 | AnnData | `.h5ad` | Scanpy/AnnData objects |
+| Seurat | `.rds` | Seurat objects (requires R + rpy2) |
 | CSV | `.csv` | Comma-separated values |
 | TSV | `.tsv` | Tab-separated values |
+| MTX | `.mtx` | 10x Genomics sparse matrix |
+
+### Loading Seurat Objects
+
+CellMetPro can directly load Seurat objects from R. This requires R and the `rpy2` package:
+
+```bash
+pip install cellmetpro[seurat]
+```
+
+```python
+from cellmetpro.core.preprocessing import DataLoader, load_seurat_rds
+
+# Option 1: Via DataLoader (auto-detects format)
+loader = DataLoader("seurat_object.rds")
+adata = loader.load()
+
+# Option 2: Direct function with options
+adata = load_seurat_rds(
+    "seurat_object.rds",
+    assay="RNA",      # Which assay to extract (default: DefaultAssay)
+    slot="data"       # "counts", "data", or "scale.data"
+)
+
+# Cell metadata and embeddings (UMAP, PCA) are automatically extracted
+print(adata.obs.head())     # Cell metadata
+print(adata.obsm.keys())    # Available embeddings
+```
+
+**Alternative: Export from R** (no rpy2 needed):
+
+```r
+# In R
+library(SeuratDisk)
+SaveH5Seurat(seurat_obj, "output.h5seurat")
+Convert("output.h5seurat", dest = "h5ad")
+```
+
+Then load directly: `adata = ad.read_h5ad("output.h5ad")`
 
 ## Supported Models
 

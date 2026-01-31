@@ -65,13 +65,13 @@ class DifferentialAnalysis:
             Results with columns: reaction, group1_mean, group2_mean,
             log2fc, pvalue, padj_bh, padj_bonf.
         """
-        
+
         valid_methods = {"wilcoxon", "ttest", "mannwhitneyu"}
         if method not in valid_methods:
             raise ValueError(
                 f"Invalid method '{method}'. Must be one of: {valid_methods}"
             )
-    
+
         # Ensure columns in reaction_scores match index in groups
         common_cells = self.reaction_scores.columns.intersection(self.groups.index)
         scores = self.reaction_scores[common_cells]
@@ -86,15 +86,15 @@ class DifferentialAnalysis:
             # reaction scores
             scores1 = scores.loc[reaction_id, cells1]
             scores2 = scores.loc[reaction_id, cells2]
-            
+
             # means
             mean1 = np.mean(scores1)
             mean2 = np.mean(scores2)
-            
+
             # log2 for change
             epsilon = 1e-9
             log2fc = np.log2((mean2 + epsilon) / (mean1 + epsilon))
-            
+
             # run statistical test
             if method == "wilcoxon":
                 stat, pval = stats.ranksums(scores1, scores2)
@@ -102,30 +102,30 @@ class DifferentialAnalysis:
                 stat, pval = stats.ttest_ind(scores1, scores2)
             elif method == "mannwhitneyu":
                 stat, pval = stats.mannwhitneyu(
-                    scores1, scores2, alternative='two-sided'
+                    scores1, scores2, alternative="two-sided"
                 )
-        
-            results.append({
-                "reaction": reaction_id,
-                "group1_mean": mean1,
-                "group2_mean": mean2,
-                "log2fc": log2fc,
-                "statistic": stat,
-                "pvalue": pval,
-            })
-            
+
+            results.append(
+                {
+                    "reaction": reaction_id,
+                    "group1_mean": mean1,
+                    "group2_mean": mean2,
+                    "log2fc": log2fc,
+                    "statistic": stat,
+                    "pvalue": pval,
+                }
+            )
+
         # FDR correction
         results_df = pd.DataFrame(results)
         # Benjamini-Hochberg (less strict)
         _, padj_bh, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")
         # Bonferroni (more strict)
-        _, padj_bonf, _, _ = multipletests(
-            results_df["pvalue"], method="bonferroni"
-        )
+        _, padj_bonf, _, _ = multipletests(results_df["pvalue"], method="bonferroni")
 
         results_df["padj_bh"] = padj_bh
         results_df["padj_bonf"] = padj_bonf
-        
+
         # sort results based on p-val
         return results_df.sort_values("pvalue")
 
@@ -159,14 +159,16 @@ class DifferentialAnalysis:
         results = []
         for reaction_id in scores.index:
             reaction_scores = scores.loc[reaction_id, group_cells]
-            results.append({
-                "reaction": reaction_id,
-                "mean_score": np.mean(reaction_scores),
-                "std_score": np.std(reaction_scores),
-                "min_score": np.min(reaction_scores),
-                "max_score": np.max(reaction_scores),
-                "n_cells": len(group_cells),
-            })
+            results.append(
+                {
+                    "reaction": reaction_id,
+                    "mean_score": np.mean(reaction_scores),
+                    "std_score": np.std(reaction_scores),
+                    "min_score": np.min(reaction_scores),
+                    "max_score": np.max(reaction_scores),
+                    "n_cells": len(group_cells),
+                }
+            )
 
         # Sort by mean score (ascending = lowest penalty = highest activity)
         results_df = pd.DataFrame(results)
@@ -250,15 +252,17 @@ class DifferentialAnalysis:
             else:
                 interpretation = "large"
 
-            results.append({
-                "reaction": reaction_id,
-                "cohens_d": cohens_d,
-                "abs_cohens_d": abs_d,
-                "interpretation": interpretation,
-                "group1_mean": mean1,
-                "group2_mean": mean2,
-                "pooled_std": pooled_std,
-            })
+            results.append(
+                {
+                    "reaction": reaction_id,
+                    "cohens_d": cohens_d,
+                    "abs_cohens_d": abs_d,
+                    "interpretation": interpretation,
+                    "group1_mean": mean1,
+                    "group2_mean": mean2,
+                    "pooled_std": pooled_std,
+                }
+            )
 
         results_df = pd.DataFrame(results)
         return results_df.sort_values("abs_cohens_d", ascending=False)
@@ -328,8 +332,7 @@ class DifferentialAnalysis:
         for reaction_id in scores.index:
             # Get scores for each group
             group_scores = [
-                scores.loc[reaction_id, cells].values
-                for cells in group_cells.values()
+                scores.loc[reaction_id, cells].values for cells in group_cells.values()
             ]
 
             # Run statistical test
@@ -460,13 +463,17 @@ class DifferentialAnalysis:
         results = []
         for row in summary_data:
             group1, group2, meandiff, p_adj, lower, upper, reject = row
-            results.append({
-                "group1": group1,
-                "group2": group2,
-                "mean_diff": float(meandiff),
-                "pvalue": float(p_adj),
-                "significant": reject if isinstance(reject, bool) else reject == "True",
-            })
+            results.append(
+                {
+                    "group1": group1,
+                    "group2": group2,
+                    "mean_diff": float(meandiff),
+                    "pvalue": float(p_adj),
+                    "significant": (
+                        reject if isinstance(reject, bool) else reject == "True"
+                    ),
+                }
+            )
 
         return pd.DataFrame(results)
 
@@ -488,7 +495,7 @@ class DifferentialAnalysis:
         idx = 0
         for g in groups:
             n = len(group_data[g])
-            group_ranks[g] = ranks[idx:idx + n]
+            group_ranks[g] = ranks[idx : idx + n]
             idx += n
 
         N = len(all_values)  # Total sample size
@@ -500,7 +507,7 @@ class DifferentialAnalysis:
 
         results = []
         for i, g1 in enumerate(groups):
-            for g2 in groups[i + 1:]:
+            for g2 in groups[i + 1 :]:
                 n1 = len(group_data[g1])
                 n2 = len(group_data[g2])
 
@@ -515,9 +522,7 @@ class DifferentialAnalysis:
                 if np.any(counts > 1):
                     tie_correction = 1 - np.sum(counts**3 - counts) / (N**3 - N)
 
-                se = np.sqrt(
-                    (N * (N + 1) / 12 - tie_correction) * (1/n1 + 1/n2)
-                )
+                se = np.sqrt((N * (N + 1) / 12 - tie_correction) * (1 / n1 + 1 / n2))
 
                 if se > 0:
                     z = (mean_rank1 - mean_rank2) / se
@@ -530,16 +535,18 @@ class DifferentialAnalysis:
                 # Bonferroni correction
                 padj = min(pval * n_comparisons, 1.0)
 
-                results.append({
-                    "group1": g1,
-                    "group2": g2,
-                    "mean_rank1": mean_rank1,
-                    "mean_rank2": mean_rank2,
-                    "z_statistic": z,
-                    "pvalue": pval,
-                    "padj": padj,
-                    "significant": padj < 0.05,
-                })
+                results.append(
+                    {
+                        "group1": g1,
+                        "group2": g2,
+                        "mean_rank1": mean_rank1,
+                        "mean_rank2": mean_rank2,
+                        "z_statistic": z,
+                        "pvalue": pval,
+                        "padj": padj,
+                        "significant": padj < 0.05,
+                    }
+                )
 
         return pd.DataFrame(results).sort_values("pvalue")
 
@@ -566,7 +573,7 @@ class DifferentialAnalysis:
         idx = 0
         for g in groups:
             n = len(group_data[g])
-            group_ranks[g] = ranks[idx:idx + n]
+            group_ranks[g] = ranks[idx : idx + n]
             idx += n
 
         N = len(all_values)
@@ -583,14 +590,14 @@ class DifferentialAnalysis:
             )
 
         # Calculate S^2 (variance of ranks)
-        S2 = (1 / (N - 1)) * (np.sum(ranks**2) - N * ((N + 1) / 2)**2)
+        S2 = (1 / (N - 1)) * (np.sum(ranks**2) - N * ((N + 1) / 2) ** 2)
 
         # Calculate A term
         A = S2 * (N - 1 - H) / (N - k)
 
         results = []
         for i, g1 in enumerate(groups):
-            for g2 in groups[i + 1:]:
+            for g2 in groups[i + 1 :]:
                 n1 = len(group_data[g1])
                 n2 = len(group_data[g2])
 
@@ -598,7 +605,7 @@ class DifferentialAnalysis:
                 mean_rank2 = np.mean(group_ranks[g2])
 
                 # Test statistic
-                denominator = np.sqrt(A * (1/n1 + 1/n2))
+                denominator = np.sqrt(A * (1 / n1 + 1 / n2))
                 if denominator > 0:
                     t = (mean_rank1 - mean_rank2) / denominator
                     # Two-tailed p-value using t-distribution
@@ -611,16 +618,18 @@ class DifferentialAnalysis:
                 # Bonferroni correction
                 padj = min(pval * n_comparisons, 1.0)
 
-                results.append({
-                    "group1": g1,
-                    "group2": g2,
-                    "mean_rank1": mean_rank1,
-                    "mean_rank2": mean_rank2,
-                    "t_statistic": t,
-                    "pvalue": pval,
-                    "padj": padj,
-                    "significant": padj < 0.05,
-                })
+                results.append(
+                    {
+                        "group1": g1,
+                        "group2": g2,
+                        "mean_rank1": mean_rank1,
+                        "mean_rank2": mean_rank2,
+                        "t_statistic": t,
+                        "pvalue": pval,
+                        "padj": padj,
+                        "significant": padj < 0.05,
+                    }
+                )
 
         return pd.DataFrame(results).sort_values("pvalue")
 
@@ -665,7 +674,7 @@ class DifferentialAnalysis:
 
         all_results = []
         for i, g1 in enumerate(groups):
-            for g2 in groups[i + 1:]:
+            for g2 in groups[i + 1 :]:
                 comparison_name = f"{g1}_vs_{g2}"
                 result = self.compare_groups(g1, g2, method=method)
                 result["comparison"] = comparison_name

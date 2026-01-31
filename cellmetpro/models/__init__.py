@@ -118,7 +118,7 @@ def load_gem(organism: str) -> cobra.Model:
         )
 
     supported = list(MODEL_URLS.keys())
-    formats = ', '.join(SUPPORTED_FORMATS)
+    formats = ", ".join(SUPPORTED_FORMATS)
     raise ValueError(
         f"Unknown organism '{organism}'. Supported organisms: {supported}\n"
         f"Or provide a path to a model file ({formats})"

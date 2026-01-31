@@ -131,11 +131,13 @@ def test_pathway_analyzer_enrich(model_with_subsystems, reaction_scores):
     analyzer = PathwayAnalyzer(reaction_scores, model_with_subsystems)
 
     # Create mock differential results
-    diff_results = pd.DataFrame({
-        "reaction": ["R1", "R2", "R3", "R4", "R5"],
-        "pvalue": [0.01, 0.02, 0.5, 0.6, 0.7],
-        "padj_bh": [0.02, 0.04, 0.5, 0.6, 0.7],
-    })
+    diff_results = pd.DataFrame(
+        {
+            "reaction": ["R1", "R2", "R3", "R4", "R5"],
+            "pvalue": [0.01, 0.02, 0.5, 0.6, 0.7],
+            "padj_bh": [0.02, 0.04, 0.5, 0.6, 0.7],
+        }
+    )
 
     enrichment = analyzer.enrich(diff_results)
 
@@ -226,11 +228,13 @@ def test_go_enrichment_from_differential(model_with_subsystems, go_annotations):
     """Test GO enrichment from differential analysis results."""
     analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
 
-    diff_results = pd.DataFrame({
-        "reaction": ["R1", "R2", "R3", "R4", "R5"],
-        "pvalue": [0.01, 0.02, 0.5, 0.6, 0.7],
-        "padj_bh": [0.02, 0.04, 0.5, 0.6, 0.7],
-    })
+    diff_results = pd.DataFrame(
+        {
+            "reaction": ["R1", "R2", "R3", "R4", "R5"],
+            "pvalue": [0.01, 0.02, 0.5, 0.6, 0.7],
+            "padj_bh": [0.02, 0.04, 0.5, 0.6, 0.7],
+        }
+    )
 
     results = analyzer.enrich_from_differential(
         diff_results,
@@ -399,13 +403,15 @@ class TestPathwayAnalyzerEdgeCases:
     def test_pathway_analyzer_nan_values(self, model_with_subsystems):
         """Test aggregation with NaN values in scores."""
         scores = pd.DataFrame(
-            np.array([
-                [1.0, np.nan, 3.0],
-                [np.nan, 2.0, 4.0],
-                [5.0, 6.0, np.nan],
-                [7.0, 8.0, 9.0],
-                [10.0, 11.0, 12.0],
-            ]),
+            np.array(
+                [
+                    [1.0, np.nan, 3.0],
+                    [np.nan, 2.0, 4.0],
+                    [5.0, 6.0, np.nan],
+                    [7.0, 8.0, 9.0],
+                    [10.0, 11.0, 12.0],
+                ]
+            ),
             index=["R1", "R2", "R3", "R4", "R5"],
             columns=["cell_0", "cell_1", "cell_2"],
         )
@@ -416,31 +422,39 @@ class TestPathwayAnalyzerEdgeCases:
         # Should handle NaN gracefully (nanmean)
         assert isinstance(result, pd.DataFrame)
 
-    def test_pathway_enrich_no_significant_reactions(self, model_with_subsystems, reaction_scores):
+    def test_pathway_enrich_no_significant_reactions(
+        self, model_with_subsystems, reaction_scores
+    ):
         """Test enrichment when no reactions are significant."""
         analyzer = PathwayAnalyzer(reaction_scores, model_with_subsystems)
 
         # All p-values > threshold
-        diff_results = pd.DataFrame({
-            "reaction": ["R1", "R2", "R3", "R4", "R5"],
-            "pvalue": [0.9, 0.8, 0.7, 0.6, 0.5],
-            "padj_bh": [0.9, 0.8, 0.7, 0.6, 0.5],
-        })
+        diff_results = pd.DataFrame(
+            {
+                "reaction": ["R1", "R2", "R3", "R4", "R5"],
+                "pvalue": [0.9, 0.8, 0.7, 0.6, 0.5],
+                "padj_bh": [0.9, 0.8, 0.7, 0.6, 0.5],
+            }
+        )
 
         enrichment = analyzer.enrich(diff_results)
 
         # Should return empty or results with high p-values
         assert isinstance(enrichment, pd.DataFrame)
 
-    def test_pathway_enrich_all_significant(self, model_with_subsystems, reaction_scores):
+    def test_pathway_enrich_all_significant(
+        self, model_with_subsystems, reaction_scores
+    ):
         """Test enrichment when all reactions are significant."""
         analyzer = PathwayAnalyzer(reaction_scores, model_with_subsystems)
 
-        diff_results = pd.DataFrame({
-            "reaction": ["R1", "R2", "R3", "R4", "R5"],
-            "pvalue": [0.001, 0.002, 0.003, 0.004, 0.005],
-            "padj_bh": [0.005, 0.006, 0.007, 0.008, 0.009],
-        })
+        diff_results = pd.DataFrame(
+            {
+                "reaction": ["R1", "R2", "R3", "R4", "R5"],
+                "pvalue": [0.001, 0.002, 0.003, 0.004, 0.005],
+                "padj_bh": [0.005, 0.006, 0.007, 0.008, 0.009],
+            }
+        )
 
         enrichment = analyzer.enrich(diff_results)
         assert isinstance(enrichment, pd.DataFrame)
@@ -449,7 +463,9 @@ class TestPathwayAnalyzerEdgeCases:
 class TestGOEnrichmentEdgeCases:
     """Edge case tests for GO enrichment analysis."""
 
-    def test_go_enrichment_empty_significant_set(self, model_with_subsystems, go_annotations):
+    def test_go_enrichment_empty_significant_set(
+        self, model_with_subsystems, go_annotations
+    ):
         """Test enrichment with empty significant reaction set."""
         analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
 
@@ -461,7 +477,9 @@ class TestGOEnrichmentEdgeCases:
         # Should return empty DataFrame
         assert len(results) == 0
 
-    def test_go_enrichment_significant_equals_background(self, model_with_subsystems, go_annotations):
+    def test_go_enrichment_significant_equals_background(
+        self, model_with_subsystems, go_annotations
+    ):
         """Test when all background reactions are significant."""
         analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
 
@@ -484,7 +502,9 @@ class TestGOEnrichmentEdgeCases:
 
     def test_go_enrichment_no_go_terms(self, model_with_subsystems):
         """Test enrichment when no GO annotations exist."""
-        empty_annotations = pd.DataFrame(columns=["gene_id", "go_term", "go_name", "namespace"])
+        empty_annotations = pd.DataFrame(
+            columns=["gene_id", "go_term", "go_name", "namespace"]
+        )
 
         analyzer = GOEnrichmentAnalyzer(model_with_subsystems, empty_annotations)
 
@@ -494,7 +514,9 @@ class TestGOEnrichmentEdgeCases:
         results = analyzer.enrich_reactions(significant, background, min_genes=1)
         assert len(results) == 0
 
-    def test_go_enrichment_invalid_namespace(self, model_with_subsystems, go_annotations):
+    def test_go_enrichment_invalid_namespace(
+        self, model_with_subsystems, go_annotations
+    ):
         """Test filtering with invalid namespace."""
         analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
 
@@ -507,7 +529,9 @@ class TestGOEnrichmentEdgeCases:
         )
         assert len(results) == 0
 
-    def test_go_enrichment_high_min_genes_threshold(self, model_with_subsystems, go_annotations):
+    def test_go_enrichment_high_min_genes_threshold(
+        self, model_with_subsystems, go_annotations
+    ):
         """Test enrichment with very high min_genes threshold."""
         analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
 
@@ -532,16 +556,20 @@ class TestGOEnrichmentEdgeCases:
 
         assert len(terms) == 0
 
-    def test_go_enrichment_from_differential_empty_results(self, model_with_subsystems, go_annotations):
+    def test_go_enrichment_from_differential_empty_results(
+        self, model_with_subsystems, go_annotations
+    ):
         """Test GO enrichment from differential results with no significant."""
         analyzer = GOEnrichmentAnalyzer(model_with_subsystems, go_annotations)
 
         # All non-significant
-        diff_results = pd.DataFrame({
-            "reaction": ["R1", "R2", "R3", "R4", "R5"],
-            "pvalue": [0.5, 0.6, 0.7, 0.8, 0.9],
-            "padj_bh": [0.5, 0.6, 0.7, 0.8, 0.9],
-        })
+        diff_results = pd.DataFrame(
+            {
+                "reaction": ["R1", "R2", "R3", "R4", "R5"],
+                "pvalue": [0.5, 0.6, 0.7, 0.8, 0.9],
+                "padj_bh": [0.5, 0.6, 0.7, 0.8, 0.9],
+            }
+        )
 
         results = analyzer.enrich_from_differential(
             diff_results, pvalue_threshold=0.05, min_genes=1

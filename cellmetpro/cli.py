@@ -65,7 +65,8 @@ Examples:
         help="Show version and exit",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose output",
     )
@@ -77,8 +78,7 @@ Examples:
         "run",
         help="Run COMPASS metabolic analysis pipeline",
         description=(
-            "Run COMPASS algorithm to score metabolic reactions "
-            "from scRNA-seq data"
+            "Run COMPASS algorithm to score metabolic reactions " "from scRNA-seq data"
         ),
         formatter_class=RichHelpFormatter,
     )
@@ -88,13 +88,15 @@ Examples:
         help="Input file (h5ad, csv, or tsv format)",
     )
     run_parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=Path,
         default=Path("results"),
         help="Output directory (default: results/)",
     )
     run_parser.add_argument(
-        "-m", "--model",
+        "-m",
+        "--model",
         type=str,
         default="human",
         help="Metabolic model: 'human', 'mouse', 'recon2', or path to SBML/JSON file",
@@ -134,7 +136,8 @@ Examples:
 
     # Performance options
     run_parser.add_argument(
-        "-j", "--n-processes",
+        "-j",
+        "--n-processes",
         type=int,
         default=1,
         help="Number of parallel processes (default: 1)",
@@ -192,7 +195,8 @@ Examples:
         help="Path to results directory from 'run' command",
     )
     dash_parser.add_argument(
-        "-p", "--port",
+        "-p",
+        "--port",
         type=int,
         default=8501,
         help="Port for Streamlit server (default: 8501)",
@@ -228,7 +232,8 @@ Examples:
         help="Group labels file (CSV with cell_id and group columns)",
     )
     diff_parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=Path,
         default=Path("differential_results"),
         help="Output directory (default: differential_results/)",
@@ -280,7 +285,8 @@ Examples:
         help="Reaction scores file (CSV with reactions x cells)",
     )
     cluster_parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=Path,
         default=Path("clustering_results"),
         help="Output directory (default: clustering_results/)",
@@ -336,7 +342,8 @@ Examples:
         help="File with reaction list (one per line or CSV with 'reaction' column)",
     )
     pathway_parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=Path,
         default=Path("pathway_results"),
         help="Output directory (default: pathway_results/)",
@@ -361,8 +368,10 @@ Examples:
     pathway_parser.add_argument(
         "--namespace",
         choices=[
-            "biological_process", "molecular_function",
-            "cellular_component", "all"
+            "biological_process",
+            "molecular_function",
+            "cellular_component",
+            "all",
         ],
         default="biological_process",
         help="GO namespace for GO enrichment (default: biological_process)",
@@ -562,6 +571,7 @@ def run_dashboard(args: argparse.Namespace) -> int:
 
     # Check if streamlit is available
     import importlib.util
+
     if importlib.util.find_spec("streamlit") is None:
         logger.error(
             "Streamlit not installed. Install with: pip install cellmetpro[dashboard]"
@@ -689,6 +699,7 @@ def run_differential(args: argparse.Namespace) -> int:
     if args.plot and "log2fc" in result.columns and "padj_bh" in result.columns:
         logger.info("Generating volcano plot...")
         import matplotlib
+
         matplotlib.use("Agg")
         from cellmetpro.visualization import plot_volcano
 
@@ -793,6 +804,7 @@ def run_cluster(args: argparse.Namespace) -> int:
     if args.plot:
         logger.info("Generating embedding plot...")
         import matplotlib
+
         matplotlib.use("Agg")
         from cellmetpro.visualization import plot_embedding
 
@@ -924,9 +936,7 @@ def run_pathway(args: argparse.Namespace) -> int:
                 logger.info(f"Significant subsystems (FDR < {fdr}): {n_sig}")
 
             result.to_csv(args.output / "subsystem_enrichment.csv", index=False)
-            logger.info(
-                f"Results saved to {args.output / 'subsystem_enrichment.csv'}"
-            )
+            logger.info(f"Results saved to {args.output / 'subsystem_enrichment.csv'}")
         else:
             # Load GO annotations from GAF file
             logger.info(f"Loading GO annotations from {args.go_annotations}")
@@ -966,6 +976,7 @@ def run_pathway(args: argparse.Namespace) -> int:
     if args.plot and len(result) > 0:
         logger.info("Generating enrichment dotplot...")
         import matplotlib
+
         matplotlib.use("Agg")
         from cellmetpro.visualization import plot_enrichment_dotplot
 

@@ -97,7 +97,7 @@ def plot_volcano(
     is_up = df[log2fc_col] >= log2fc_threshold
     conditions = [
         is_down & is_significant,  # Down
-        is_up & is_significant,    # Up
+        is_up & is_significant,  # Up
     ]
     choices = ["down", "up"]
     df["category"] = np.select(conditions, choices, default="ns")
@@ -151,16 +151,19 @@ def plot_volcano(
     # Add labels
     texts = []
     for _, row in sig_df.iterrows():
-        texts.append(ax.annotate(
-            row[reaction_col],
-            (row[log2fc_col], row["neg_log10_pval"]),
-            fontsize=8,
-            alpha=0.8,
-        ))
+        texts.append(
+            ax.annotate(
+                row[reaction_col],
+                (row[log2fc_col], row["neg_log10_pval"]),
+                fontsize=8,
+                alpha=0.8,
+            )
+        )
 
     # Try to adjust text positions to avoid overlap
     try:
         from adjustText import adjust_text
+
         adjust_text(texts, ax=ax)
     except ImportError:
         pass  # adjustText not available

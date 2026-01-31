@@ -79,7 +79,11 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # Line too long (handled by Black)
+    "N806",   # Variable in function should be lowercase (scientific notation uses X, A, B, etc.)
+    "E741",   # Ambiguous variable name (l, O, I - common in math)
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

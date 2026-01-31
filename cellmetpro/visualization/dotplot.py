@@ -110,15 +110,17 @@ def plot_reaction_dotplot(
             fraction_active = (reaction_values < threshold).mean()
             n_cells = len(group_cells)
 
-            stats.append({
-                "reaction": reaction,
-                "group": group,
-                "mean_score": mean_score,
-                "median_score": median_score,
-                "std_score": std_score,
-                "fraction_active": fraction_active,
-                "n_cells": n_cells,
-            })
+            stats.append(
+                {
+                    "reaction": reaction,
+                    "group": group,
+                    "mean_score": mean_score,
+                    "median_score": median_score,
+                    "std_score": std_score,
+                    "fraction_active": fraction_active,
+                    "n_cells": n_cells,
+                }
+            )
 
     stats_df = pd.DataFrame(stats)
 
@@ -191,18 +193,24 @@ def plot_reaction_dotplot(
         for ls in legend_sizes:
             size = size_range[0] + ls * (size_range[1] - size_range[0])
             legend_points.append(
-                Line2D([0], [0], marker='o', color='w',
-                       markerfacecolor='gray', markersize=np.sqrt(size),
-                       label=f'{ls:.0%}')
+                Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="w",
+                    markerfacecolor="gray",
+                    markersize=np.sqrt(size),
+                    label=f"{ls:.0%}",
+                )
             )
-            legend_labels.append(f'{ls:.0%}')
+            legend_labels.append(f"{ls:.0%}")
 
         ax.legend(
             handles=legend_points,
             title=size_scale.replace("_", " ").title(),
-            loc='upper left',
+            loc="upper left",
             bbox_to_anchor=(1.15, 1),
-            frameon=False
+            frameon=False,
         )
 
     plt.tight_layout()

@@ -96,15 +96,20 @@ def plot_embedding(
 
         # Check if categorical
         is_categorical = (
-            isinstance(color_values[0], str) or
-            len(np.unique(color_values)) < 20
+            isinstance(color_values[0], str) or len(np.unique(color_values)) < 20
         )
 
         if is_categorical:
             _plot_categorical(
-                ax, embedding, color_values,
-                categorical_palette, point_size, alpha,
-                legend, legend_loc, **kwargs
+                ax,
+                embedding,
+                color_values,
+                categorical_palette,
+                point_size,
+                alpha,
+                legend,
+                legend_loc,
+                **kwargs,
             )
         else:
             scatter = ax.scatter(
@@ -155,9 +160,11 @@ def _plot_categorical(
     """Plot embedding with categorical coloring."""
     try:
         import seaborn as sns
+
         colors = sns.color_palette(palette, len(np.unique(categories)))
     except ImportError:
         import matplotlib.cm as cm
+
         n_categories = len(np.unique(categories))
         colors = cm.get_cmap("tab10")(np.linspace(0, 1, n_categories))
 
@@ -389,8 +396,7 @@ def plot_feature_on_embedding(
     nrows = int(np.ceil(n_features / ncols))
 
     fig, axes = plt.subplots(
-        nrows, ncols,
-        figsize=(figsize_per_plot[0] * ncols, figsize_per_plot[1] * nrows)
+        nrows, ncols, figsize=(figsize_per_plot[0] * ncols, figsize_per_plot[1] * nrows)
     )
     axes = np.atleast_2d(axes)
 
@@ -411,8 +417,14 @@ def plot_feature_on_embedding(
             )
             plt.colorbar(scatter, ax=ax)
         else:
-            ax.text(0.5, 0.5, f"'{feature_name}' not found",
-                   ha="center", va="center", transform=ax.transAxes)
+            ax.text(
+                0.5,
+                0.5,
+                f"'{feature_name}' not found",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
 
         ax.set_title(feature_name)
         ax.set_xticks([])

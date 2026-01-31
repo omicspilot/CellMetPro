@@ -8,6 +8,13 @@ This module provides plotting functions for:
 - Interactive dashboards
 """
 
+from .advanced import (
+    plot_radar,
+    plot_ridge,
+    plot_stacked_bar,
+    plot_subsystem_waterfall,
+    plot_waterfall,
+)
 from .dotplot import (
     plot_enrichment_dotplot,
     plot_reaction_dotplot,
@@ -34,13 +41,6 @@ from .violin import (
 from .volcano import (
     plot_ma,
     plot_volcano,
-)
-from .advanced import (
-    plot_radar,
-    plot_ridge,
-    plot_stacked_bar,
-    plot_subsystem_waterfall,
-    plot_waterfall,
 )
 
 __all__ = [

@@ -22,14 +22,20 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from functools import lru_cache
-from typing import TYPE_CHECKING, Callable, Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 from scipy.sparse import issparse
 
 if TYPE_CHECKING:
@@ -241,7 +247,10 @@ class ParsedGPR:
 
         op, children = tree
         child_values = np.array(
-            [self._evaluate_tree(c, expr, gene_to_idx, and_func, or_func) for c in children]
+            [
+                self._evaluate_tree(c, expr, gene_to_idx, and_func, or_func)
+                for c in children
+            ]
         )
 
         if op == "OR":
@@ -350,9 +359,7 @@ class CompassScorer:
                     data = expr.X.toarray().T
                 else:
                     data = expr.X.T
-                return pd.DataFrame(
-                    data, index=expr.var_names, columns=expr.obs_names
-                )
+                return pd.DataFrame(data, index=expr.var_names, columns=expr.obs_names)
         except ImportError:
             pass
 
@@ -459,9 +466,7 @@ class CompassScorer:
 
         # Create DataFrame efficiently
         reaction_ids = [rxn.id for rxn in reactions_with_gpr]
-        reaction_expr_df = pd.DataFrame(
-            reaction_expression, index=self.cell_names
-        ).T
+        reaction_expr_df = pd.DataFrame(reaction_expression, index=self.cell_names).T
         reaction_expr_df.index = reaction_ids
 
         # Convert expression to penalties using optimized numpy operations
@@ -526,7 +531,9 @@ class CompassScorer:
                     "Evaluating GPR rules...", total=len(reactions)
                 )
                 for rxn in reactions:
-                    self._evaluate_single_gpr(rxn, expr_array, and_func, or_func, result)
+                    self._evaluate_single_gpr(
+                        rxn, expr_array, and_func, or_func, result
+                    )
                     progress.update(task, advance=1)
         else:
             for rxn in reactions:
@@ -545,9 +552,7 @@ class CompassScorer:
         """Evaluate GPR for a single reaction and store in result dict."""
         if rxn.id in self._parsed_gprs:
             parsed = self._parsed_gprs[rxn.id]
-            values = parsed.evaluate(
-                expr_array, self._gene_to_idx, and_func, or_func
-            )
+            values = parsed.evaluate(expr_array, self._gene_to_idx, and_func, or_func)
             result[rxn.id] = values
 
             # Track missing genes
@@ -788,9 +793,9 @@ class CompassScorer:
             neighbor_penalties = penalties_array[neighbor_indices].mean(axis=0)
 
             # Blend with lambda
-            smoothed[i] = (
-                1 - self.config.lambda_penalty
-            ) * penalties_array[i] + self.config.lambda_penalty * neighbor_penalties
+            smoothed[i] = (1 - self.config.lambda_penalty) * penalties_array[
+                i
+            ] + self.config.lambda_penalty * neighbor_penalties
 
         smoothed_df = pd.DataFrame(
             smoothed.T, index=penalties.index, columns=penalties.columns
@@ -798,9 +803,7 @@ class CompassScorer:
 
         return smoothed_df
 
-    def optimize_reactions(
-        self, penalties: pd.DataFrame | None = None
-    ) -> pd.DataFrame:
+    def optimize_reactions(self, penalties: pd.DataFrame | None = None) -> pd.DataFrame:
         """Run COMPASS optimization for each reaction.
 
         For each reaction and each cell:
@@ -867,9 +870,7 @@ class CompassScorer:
                     TaskProgressColumn(),
                     transient=True,
                 ) as progress:
-                    task = progress.add_task(
-                        "Optimizing cells...", total=n_cells
-                    )
+                    task = progress.add_task("Optimizing cells...", total=n_cells)
                     for batch_start in range(0, n_cells, batch_size):
                         batch_end = min(batch_start + batch_size, n_cells)
                         batch_cells = self.cell_names[batch_start:batch_end]
@@ -1143,9 +1144,7 @@ class CompassScorer:
         cell_batches = []
         for i in range(0, n_cells, batch_size):
             batch_cells = self.cell_names[i : i + batch_size]
-            batch_penalties = {
-                cell: penalties[cell].to_dict() for cell in batch_cells
-            }
+            batch_penalties = {cell: penalties[cell].to_dict() for cell in batch_cells}
             cell_batches.append((batch_cells, batch_penalties))
 
         logger.info(
@@ -1263,7 +1262,6 @@ class CompassScorer:
             Uptake scores and secretion scores.
         """
         logger.info("Computing exchange reaction scores...")
-
 
         model = self.model.copy()
 
@@ -1419,10 +1417,6 @@ def _optimize_batch_worker(
     dict
         Mapping from cell name to scores dict.
     """
-    import cobra
-
-    model = cobra.io.from_json(model_json)
-
     results = {}
     for cell_name, penalties_dict in batch_penalties.items():
         results[cell_name] = _optimize_cell_worker(

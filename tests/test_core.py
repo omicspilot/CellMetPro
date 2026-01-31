@@ -631,9 +631,7 @@ class TestCompassPenaltySmoothing:
         """Test KNN-based penalty smoothing."""
         from cellmetpro.core.compass import CompassConfig, CompassScorer
 
-        config = CompassConfig(
-            lambda_penalty=0.5, n_neighbors=2, show_progress=False
-        )
+        config = CompassConfig(lambda_penalty=0.5, n_neighbors=2, show_progress=False)
         scorer = CompassScorer(simple_model, expression_df, config)
         penalties = scorer.compute_reaction_penalties()
 
@@ -678,9 +676,7 @@ class TestRunCompassFunction:
         from cellmetpro.core.compass import CompassConfig, run_compass
 
         config = CompassConfig(show_progress=False)
-        result = run_compass(
-            simple_model, expression_df, config, compute_exchange=True
-        )
+        result = run_compass(simple_model, expression_df, config, compute_exchange=True)
 
         assert result is not None
         assert result.uptake_scores is not None
@@ -1064,11 +1060,13 @@ class TestCompassOptimizations:
         from cellmetpro.core.compass import ParsedGPR
 
         # Create expression matrix (3 genes x 4 cells)
-        expr = np.array([
-            [1.0, 2.0, 3.0, 4.0],  # GENE1
-            [5.0, 6.0, 7.0, 8.0],  # GENE2
-            [9.0, 10.0, 11.0, 12.0],  # GENE3
-        ])
+        expr = np.array(
+            [
+                [1.0, 2.0, 3.0, 4.0],  # GENE1
+                [5.0, 6.0, 7.0, 8.0],  # GENE2
+                [9.0, 10.0, 11.0, 12.0],  # GENE3
+            ]
+        )
         gene_to_idx = {"GENE1": 0, "GENE2": 1, "GENE3": 2}
 
         # Test single gene
@@ -1122,7 +1120,8 @@ class TestCompassOptimizations:
         # Pre-compute max fluxes
         model = simple_model.copy()
         internal_reactions = [
-            rxn.id for rxn in model.reactions
+            rxn.id
+            for rxn in model.reactions
             if rxn.id in penalties.index and not rxn.boundary
         ]
         scorer._precompute_max_fluxes(model, internal_reactions)
@@ -1441,7 +1440,7 @@ class TestFBAEdgeCases:
         # Block all paths to objective
         fba.set_bounds("EX_A", lower=0, upper=0)
 
-        fluxes = fba.optimize()
+        fba.optimize()
         assert fba.solution is not None
 
     def test_fba_knockout_nonexistent_reaction(self, simple_model):
@@ -1509,11 +1508,13 @@ class TestMicroclusteringEdgeCases:
         from cellmetpro.core.microclustering import filter_genes_fano
 
         # Create data where some genes have zero variance
-        data = np.array([
-            [1, 1, 1, 1, 1],  # Zero variance
-            [1, 2, 3, 4, 5],  # Has variance
-            [5, 5, 5, 5, 5],  # Zero variance
-        ])
+        data = np.array(
+            [
+                [1, 1, 1, 1, 1],  # Zero variance
+                [1, 2, 3, 4, 5],  # Has variance
+                [5, 5, 5, 5, 5],  # Zero variance
+            ]
+        )
         expression_df = pd.DataFrame(
             data,
             index=["GENE1", "GENE2", "GENE3"],

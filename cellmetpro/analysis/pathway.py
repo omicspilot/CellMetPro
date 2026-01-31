@@ -103,8 +103,7 @@ class PathwayAnalyzer:
                 results[pathway] = agg_func(pathway_data.values, axis=0)
 
         self.pathway_scores = pd.DataFrame(
-            results,
-            index=self.reaction_scores.columns
+            results, index=self.reaction_scores.columns
         ).T
 
         return self.pathway_scores
@@ -177,15 +176,17 @@ class PathwayAnalyzer:
             expected = len(sig_reactions) * len(pathway_reactions) / len(background)
             fold_enrichment = a / expected if expected > 0 else 0
 
-            results.append({
-                "pathway": pathway,
-                "n_sig_in_pathway": a,
-                "n_pathway_total": len(pathway_reactions),
-                "n_sig_total": len(sig_reactions),
-                "n_background": len(background),
-                "fold_enrichment": fold_enrichment,
-                "pvalue": pval,
-            })
+            results.append(
+                {
+                    "pathway": pathway,
+                    "n_sig_in_pathway": a,
+                    "n_pathway_total": len(pathway_reactions),
+                    "n_sig_total": len(sig_reactions),
+                    "n_background": len(background),
+                    "fold_enrichment": fold_enrichment,
+                    "pvalue": pval,
+                }
+            )
 
         results_df = pd.DataFrame(results)
 
@@ -358,14 +359,15 @@ class GOEnrichmentAnalyzer:
             ]
             namespace_terms = set(filtered["go_term"])
             go_to_reactions = {
-                go: rxns for go, rxns in go_to_reactions.items()
+                go: rxns
+                for go, rxns in go_to_reactions.items()
                 if go in namespace_terms
             }
 
         # Build GO term metadata
-        go_metadata = self.go_annotations.drop_duplicates(
-            subset=["go_term"]
-        ).set_index("go_term")
+        go_metadata = self.go_annotations.drop_duplicates(subset=["go_term"]).set_index(
+            "go_term"
+        )
 
         results = []
         for go_term, go_reactions in go_to_reactions.items():
@@ -404,18 +406,20 @@ class GOEnrichmentAnalyzer:
                 go_name = ""
                 go_namespace = ""
 
-            results.append({
-                "go_term": go_term,
-                "go_name": go_name,
-                "namespace": go_namespace,
-                "n_sig_in_term": a,
-                "n_term_total": len(go_reactions),
-                "n_sig_total": len(significant_reactions),
-                "n_background": len(background_reactions),
-                "fold_enrichment": fold_enrichment,
-                "pvalue": pval,
-                "reactions": ",".join(sorted(significant_reactions & go_reactions)),
-            })
+            results.append(
+                {
+                    "go_term": go_term,
+                    "go_name": go_name,
+                    "namespace": go_namespace,
+                    "n_sig_in_term": a,
+                    "n_term_total": len(go_reactions),
+                    "n_sig_total": len(significant_reactions),
+                    "n_background": len(background_reactions),
+                    "fold_enrichment": fold_enrichment,
+                    "pvalue": pval,
+                    "reactions": ",".join(sorted(significant_reactions & go_reactions)),
+                }
+            )
 
         results_df = pd.DataFrame(results)
 
@@ -480,7 +484,7 @@ def load_go_annotations_from_gaf(gaf_path: str) -> pd.DataFrame:
     """
     rows = []
 
-    with open(gaf_path, "r") as f:
+    with open(gaf_path) as f:
         for line in f:
             if line.startswith("!"):
                 continue  # Skip header lines
@@ -496,12 +500,14 @@ def load_go_annotations_from_gaf(gaf_path: str) -> pd.DataFrame:
             namespace_map = {"F": "MF", "P": "BP", "C": "CC"}
             namespace = namespace_map.get(namespace_code, namespace_code)
 
-            rows.append({
-                "gene_id": gene_id,
-                "go_term": go_term,
-                "go_name": "",  # GAF doesn't include names
-                "namespace": namespace,
-            })
+            rows.append(
+                {
+                    "gene_id": gene_id,
+                    "go_term": go_term,
+                    "go_name": "",  # GAF doesn't include names
+                    "namespace": namespace,
+                }
+            )
 
     return pd.DataFrame(rows)
 
@@ -537,12 +543,14 @@ def create_go_annotations_from_dict(
     rows = []
     for gene_id, go_terms in gene_to_go.items():
         for go_term, go_name, namespace in go_terms:
-            rows.append({
-                "gene_id": gene_id,
-                "go_term": go_term,
-                "go_name": go_name,
-                "namespace": namespace,
-            })
+            rows.append(
+                {
+                    "gene_id": gene_id,
+                    "go_term": go_term,
+                    "go_name": go_name,
+                    "namespace": namespace,
+                }
+            )
 
     return pd.DataFrame(rows)
 
@@ -607,15 +615,17 @@ def subsystem_enrichment(
         expected = len(sig_reactions) * len(pathway_reactions) / len(bg_reactions)
         fold_enrichment = a / expected if expected > 0 else 0
 
-        results.append({
-            "pathway": pathway,
-            "n_sig_in_pathway": a,
-            "n_pathway_total": len(pathway_reactions),
-            "n_sig_total": len(sig_reactions),
-            "n_background": len(bg_reactions),
-            "fold_enrichment": fold_enrichment,
-            "pvalue": pval,
-        })
+        results.append(
+            {
+                "pathway": pathway,
+                "n_sig_in_pathway": a,
+                "n_pathway_total": len(pathway_reactions),
+                "n_sig_total": len(sig_reactions),
+                "n_background": len(bg_reactions),
+                "fold_enrichment": fold_enrichment,
+                "pvalue": pval,
+            }
+        )
 
     results_df = pd.DataFrame(results)
 

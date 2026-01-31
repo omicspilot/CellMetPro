@@ -161,13 +161,9 @@ def microcluster(
             config.random_state,
         )
     elif config.method == "kmeans":
-        labels = _kmeans_clustering(
-            pca_coords, target_n_clusters, config.random_state
-        )
+        labels = _kmeans_clustering(pca_coords, target_n_clusters, config.random_state)
     elif config.method == "knn":
-        labels = _knn_partitioning(
-            knn_indices, target_n_clusters, config.random_state
-        )
+        labels = _knn_partitioning(knn_indices, target_n_clusters, config.random_state)
     else:
         raise ValueError(f"Unknown clustering method: {config.method}")
 
@@ -318,9 +314,7 @@ def _kmeans_clustering(
 
     n_clusters = max(1, min(n_clusters, len(coords)))
 
-    kmeans = KMeans(
-        n_clusters=n_clusters, random_state=random_state, n_init=10
-    )
+    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
     labels = kmeans.fit_predict(coords)
 
     return labels

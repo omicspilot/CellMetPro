@@ -250,7 +250,6 @@ def plot_ridge(
     -------
     >>> fig = plot_ridge(scores, groups, n_top=15)
     """
-    import matplotlib.pyplot as plt
 
     try:
         import seaborn as sns
@@ -326,7 +325,9 @@ def plot_ridge(
     # Add reaction labels on the left
     for i, ax in enumerate(g.axes.flat):
         ax.text(
-            -0.1, 0.5, plot_reactions[i],
+            -0.1,
+            0.5,
+            plot_reactions[i],
             transform=ax.transAxes,
             fontsize=9,
             ha="right",
@@ -468,7 +469,8 @@ def plot_radar(
         values += values[:1]  # Close the polygon
 
         ax.plot(
-            angles, values,
+            angles,
+            values,
             linewidth=2,
             linestyle="solid",
             label=group,
@@ -613,6 +615,7 @@ def plot_waterfall(
 
     # Add legend
     from matplotlib.patches import Patch
+
     legend_elements = [
         Patch(facecolor=up_color, label="Up (significant)"),
         Patch(facecolor=down_color, label="Down (significant)"),
@@ -728,6 +731,7 @@ def plot_subsystem_waterfall(
 
     # Legend
     from matplotlib.patches import Patch
+
     legend_elements = [
         Patch(facecolor=sig_color, label=f"Significant (p < {pvalue_threshold})"),
         Patch(facecolor=ns_color, label="Not significant"),

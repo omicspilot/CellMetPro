@@ -82,9 +82,7 @@ class FluxBalanceAnalyzer:
                     "Optimization infeasible. Check model constraints and bounds."
                 )
             elif self.solution.status == "unbounded":
-                raise ValueError(
-                    "Optimization unbounded. Check reaction bounds."
-                )
+                raise ValueError("Optimization unbounded. Check reaction bounds.")
 
         return self.solution.fluxes
 
@@ -283,10 +281,12 @@ class FluxBalanceAnalyzer:
             lines.append("Objective value: N/A (solution not optimal)")
             return "\n".join(lines)
 
-        lines.extend([
-            "",
-            "Top 10 reactions by flux:",
-        ])
+        lines.extend(
+            [
+                "",
+                "Top 10 reactions by flux:",
+            ]
+        )
 
         top_fluxes = self.solution.fluxes.abs().nlargest(10)
         for rxn_id, flux in top_fluxes.items():
@@ -326,9 +326,7 @@ def compute_yield(
         If substrate_uptake is zero or negative.
     """
     if substrate_uptake <= 0:
-        raise ValueError(
-            f"substrate_uptake must be positive, got {substrate_uptake}"
-        )
+        raise ValueError(f"substrate_uptake must be positive, got {substrate_uptake}")
 
     with model:
         # Set substrate uptake

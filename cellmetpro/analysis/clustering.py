@@ -229,8 +229,14 @@ class MetabolicClustering:
     def cluster(
         self,
         method: Literal[
-            "leiden", "kmeans", "louvain", "hierarchical",
-            "spectral", "dbscan", "minibatch_kmeans", "hdbscan"
+            "leiden",
+            "kmeans",
+            "louvain",
+            "hierarchical",
+            "spectral",
+            "dbscan",
+            "minibatch_kmeans",
+            "hdbscan",
         ] = "leiden",
         resolution: float = 1.0,
         n_neighbors: int = 15,
@@ -523,13 +529,15 @@ class MetabolicClustering:
             top_indices = np.argsort(scores)[:n_top]
 
             for idx in top_indices:
-                results.append({
-                    "cluster": cluster_id,
-                    "reaction": reaction_ids[idx],
-                    "cluster_mean": cluster_mean[idx],
-                    "other_mean": other_mean[idx],
-                    "score_diff": scores[idx],
-                })
+                results.append(
+                    {
+                        "cluster": cluster_id,
+                        "reaction": reaction_ids[idx],
+                        "cluster_mean": cluster_mean[idx],
+                        "other_mean": other_mean[idx],
+                        "score_diff": scores[idx],
+                    }
+                )
 
         return pd.DataFrame(results)
 
@@ -581,7 +589,7 @@ class MetabolicClustering:
             embedding_df = pd.DataFrame(
                 self.embedding,
                 index=self.cell_ids,
-                columns=[f"metabolic_{i+1}" for i in range(self.embedding.shape[1])]
+                columns=[f"metabolic_{i+1}" for i in range(self.embedding.shape[1])],
             )
             common_cells = adata.obs_names.intersection(embedding_df.index)
             adata.obsm["X_metabolic"] = embedding_df.loc[common_cells].values
@@ -754,9 +762,7 @@ def compare_clusterings(
 
     return {
         "adjusted_rand": float(adjusted_rand_score(labels1, labels2)),
-        "normalized_mutual_info": float(
-            normalized_mutual_info_score(labels1, labels2)
-        ),
+        "normalized_mutual_info": float(normalized_mutual_info_score(labels1, labels2)),
         "fowlkes_mallows": float(fowlkes_mallows_score(labels1, labels2)),
         "adjusted_mutual_info": float(adjusted_mutual_info_score(labels1, labels2)),
     }
@@ -812,13 +818,15 @@ def benchmark_clustering_methods(
             results.append(metrics)
         except (ImportError, ValueError) as e:
             # Skip methods with missing dependencies or errors
-            results.append({
-                "method": method,
-                "silhouette": np.nan,
-                "calinski_harabasz": np.nan,
-                "davies_bouldin": np.nan,
-                "n_clusters": 0,
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "method": method,
+                    "silhouette": np.nan,
+                    "calinski_harabasz": np.nan,
+                    "davies_bouldin": np.nan,
+                    "n_clusters": 0,
+                    "error": str(e),
+                }
+            )
 
     return pd.DataFrame(results)

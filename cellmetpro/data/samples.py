@@ -64,33 +64,75 @@ def load_sample_expression(
 
     # Metabolic pathway genes (glycolysis, TCA, oxidative phosphorylation)
     glycolysis_genes = [
-        "HK1", "HK2", "PFKM", "PFKL", "ALDOA", "ALDOB",
-        "GAPDH", "PGK1", "PGAM1", "ENO1", "ENO2", "PKM", "PKLR",
+        "HK1",
+        "HK2",
+        "PFKM",
+        "PFKL",
+        "ALDOA",
+        "ALDOB",
+        "GAPDH",
+        "PGK1",
+        "PGAM1",
+        "ENO1",
+        "ENO2",
+        "PKM",
+        "PKLR",
     ]
 
     tca_genes = [
-        "CS", "ACO1", "ACO2", "IDH1", "IDH2", "IDH3A",
-        "OGDH", "SUCLA2", "SDHA", "SDHB", "FH", "MDH1", "MDH2",
+        "CS",
+        "ACO1",
+        "ACO2",
+        "IDH1",
+        "IDH2",
+        "IDH3A",
+        "OGDH",
+        "SUCLA2",
+        "SDHA",
+        "SDHB",
+        "FH",
+        "MDH1",
+        "MDH2",
     ]
 
     oxphos_genes = [
-        "NDUFA1", "NDUFB1", "NDUFS1", "SDHC", "UQCRB",
-        "COX4I1", "COX5A", "COX6A1", "ATP5A1", "ATP5B", "ATP5C1",
+        "NDUFA1",
+        "NDUFB1",
+        "NDUFS1",
+        "SDHC",
+        "UQCRB",
+        "COX4I1",
+        "COX5A",
+        "COX6A1",
+        "ATP5A1",
+        "ATP5B",
+        "ATP5C1",
     ]
 
     amino_acid_genes = [
-        "GLUL", "GLUD1", "GOT1", "GOT2", "GPT", "GPT2",
-        "BCAT1", "BCAT2", "ASS1", "ASL",
+        "GLUL",
+        "GLUD1",
+        "GOT1",
+        "GOT2",
+        "GPT",
+        "GPT2",
+        "BCAT1",
+        "BCAT2",
+        "ASS1",
+        "ASL",
     ]
 
     lipid_genes = [
-        "FASN", "ACACA", "SCD", "ACLY", "ELOVL1",
+        "FASN",
+        "ACACA",
+        "SCD",
+        "ACLY",
+        "ELOVL1",
     ]
 
     # Combine genes
     all_genes = (
-        glycolysis_genes + tca_genes + oxphos_genes
-        + amino_acid_genes + lipid_genes
+        glycolysis_genes + tca_genes + oxphos_genes + amino_acid_genes + lipid_genes
     )
 
     # Select genes up to n_genes
@@ -214,12 +256,14 @@ def load_sample_groups(
         else:
             treatments.append("treatment")
 
-    return pd.DataFrame({
-        "cell": cells,
-        "group": cell_types,
-        "cell_type": cell_types,
-        "treatment": treatments,
-    })
+    return pd.DataFrame(
+        {
+            "cell": cells,
+            "group": cell_types,
+            "cell_type": cell_types,
+            "treatment": treatments,
+        }
+    )
 
 
 def load_sample_reaction_scores(
@@ -259,18 +303,42 @@ def load_sample_reaction_scores(
 
     # Metabolic reactions
     glycolysis_rxns = [
-        "HEX1", "PGI", "PFK", "FBA", "TPI",
-        "GAPD", "PGK", "PGM", "ENO", "PYK",
+        "HEX1",
+        "PGI",
+        "PFK",
+        "FBA",
+        "TPI",
+        "GAPD",
+        "PGK",
+        "PGM",
+        "ENO",
+        "PYK",
     ]
 
     tca_rxns = [
-        "CS", "ACONT", "ICDHx", "AKGD", "SUCOAS",
-        "SUCD", "FUM", "MDH", "PC", "ME",
+        "CS",
+        "ACONT",
+        "ICDHx",
+        "AKGD",
+        "SUCOAS",
+        "SUCD",
+        "FUM",
+        "MDH",
+        "PC",
+        "ME",
     ]
 
     transport_rxns = [
-        "GLCt1", "PYRt2m", "LACt", "ATPt", "O2t",
-        "CO2t", "NH4t", "GLNt", "GLUt", "AKGt",
+        "GLCt1",
+        "PYRt2m",
+        "LACt",
+        "ATPt",
+        "O2t",
+        "CO2t",
+        "NH4t",
+        "GLNt",
+        "GLUt",
+        "AKGt",
     ]
 
     all_rxns = glycolysis_rxns + tca_rxns + transport_rxns
@@ -340,15 +408,25 @@ def create_sample_model():
 
     # Create metabolites
     metabolites = {
-        "glc_e": cobra.Metabolite("glc_e", name="Glucose (extracellular)", compartment="e"),
+        "glc_e": cobra.Metabolite(
+            "glc_e", name="Glucose (extracellular)", compartment="e"
+        ),
         "glc_c": cobra.Metabolite("glc_c", name="Glucose (cytosol)", compartment="c"),
         "g6p_c": cobra.Metabolite("g6p_c", name="Glucose-6-phosphate", compartment="c"),
-        "f6p_c": cobra.Metabolite("f6p_c", name="Fructose-6-phosphate", compartment="c"),
-        "fbp_c": cobra.Metabolite("fbp_c", name="Fructose-1,6-bisphosphate", compartment="c"),
-        "g3p_c": cobra.Metabolite("g3p_c", name="Glyceraldehyde-3-phosphate", compartment="c"),
+        "f6p_c": cobra.Metabolite(
+            "f6p_c", name="Fructose-6-phosphate", compartment="c"
+        ),
+        "fbp_c": cobra.Metabolite(
+            "fbp_c", name="Fructose-1,6-bisphosphate", compartment="c"
+        ),
+        "g3p_c": cobra.Metabolite(
+            "g3p_c", name="Glyceraldehyde-3-phosphate", compartment="c"
+        ),
         "pyr_c": cobra.Metabolite("pyr_c", name="Pyruvate (cytosol)", compartment="c"),
         "lac_c": cobra.Metabolite("lac_c", name="Lactate (cytosol)", compartment="c"),
-        "lac_e": cobra.Metabolite("lac_e", name="Lactate (extracellular)", compartment="e"),
+        "lac_e": cobra.Metabolite(
+            "lac_e", name="Lactate (extracellular)", compartment="e"
+        ),
         "atp_c": cobra.Metabolite("atp_c", name="ATP", compartment="c"),
         "adp_c": cobra.Metabolite("adp_c", name="ADP", compartment="c"),
     }
@@ -359,10 +437,12 @@ def create_sample_model():
     # Glucose transport
     glc_transport = cobra.Reaction("GLCt1")
     glc_transport.name = "Glucose transport"
-    glc_transport.add_metabolites({
-        metabolites["glc_e"]: -1,
-        metabolites["glc_c"]: 1,
-    })
+    glc_transport.add_metabolites(
+        {
+            metabolites["glc_e"]: -1,
+            metabolites["glc_c"]: 1,
+        }
+    )
     glc_transport.bounds = (-10, 10)
     glc_transport.gene_reaction_rule = "SLC2A1 or SLC2A3"
     reactions.append(glc_transport)
@@ -370,12 +450,14 @@ def create_sample_model():
     # Hexokinase
     hex1 = cobra.Reaction("HEX1")
     hex1.name = "Hexokinase"
-    hex1.add_metabolites({
-        metabolites["glc_c"]: -1,
-        metabolites["atp_c"]: -1,
-        metabolites["g6p_c"]: 1,
-        metabolites["adp_c"]: 1,
-    })
+    hex1.add_metabolites(
+        {
+            metabolites["glc_c"]: -1,
+            metabolites["atp_c"]: -1,
+            metabolites["g6p_c"]: 1,
+            metabolites["adp_c"]: 1,
+        }
+    )
     hex1.bounds = (0, 1000)
     hex1.gene_reaction_rule = "HK1 or HK2"
     reactions.append(hex1)
@@ -383,10 +465,12 @@ def create_sample_model():
     # Phosphoglucose isomerase
     pgi = cobra.Reaction("PGI")
     pgi.name = "Phosphoglucose isomerase"
-    pgi.add_metabolites({
-        metabolites["g6p_c"]: -1,
-        metabolites["f6p_c"]: 1,
-    })
+    pgi.add_metabolites(
+        {
+            metabolites["g6p_c"]: -1,
+            metabolites["f6p_c"]: 1,
+        }
+    )
     pgi.bounds = (-1000, 1000)
     pgi.gene_reaction_rule = "GPI"
     reactions.append(pgi)
@@ -394,12 +478,14 @@ def create_sample_model():
     # Phosphofructokinase
     pfk = cobra.Reaction("PFK")
     pfk.name = "Phosphofructokinase"
-    pfk.add_metabolites({
-        metabolites["f6p_c"]: -1,
-        metabolites["atp_c"]: -1,
-        metabolites["fbp_c"]: 1,
-        metabolites["adp_c"]: 1,
-    })
+    pfk.add_metabolites(
+        {
+            metabolites["f6p_c"]: -1,
+            metabolites["atp_c"]: -1,
+            metabolites["fbp_c"]: 1,
+            metabolites["adp_c"]: 1,
+        }
+    )
     pfk.bounds = (0, 1000)
     pfk.gene_reaction_rule = "PFKM or PFKL"
     reactions.append(pfk)
@@ -407,10 +493,12 @@ def create_sample_model():
     # Aldolase (simplified: FBP -> 2 G3P)
     fba = cobra.Reaction("FBA")
     fba.name = "Aldolase"
-    fba.add_metabolites({
-        metabolites["fbp_c"]: -1,
-        metabolites["g3p_c"]: 2,
-    })
+    fba.add_metabolites(
+        {
+            metabolites["fbp_c"]: -1,
+            metabolites["g3p_c"]: 2,
+        }
+    )
     fba.bounds = (-1000, 1000)
     fba.gene_reaction_rule = "ALDOA or ALDOB"
     reactions.append(fba)
@@ -418,12 +506,14 @@ def create_sample_model():
     # Glycolysis (simplified: G3P -> Pyruvate + ATP)
     gapdh_to_pyk = cobra.Reaction("GAPD_PYK")
     gapdh_to_pyk.name = "Glycolysis (G3P to Pyruvate)"
-    gapdh_to_pyk.add_metabolites({
-        metabolites["g3p_c"]: -1,
-        metabolites["adp_c"]: -2,
-        metabolites["pyr_c"]: 1,
-        metabolites["atp_c"]: 2,
-    })
+    gapdh_to_pyk.add_metabolites(
+        {
+            metabolites["g3p_c"]: -1,
+            metabolites["adp_c"]: -2,
+            metabolites["pyr_c"]: 1,
+            metabolites["atp_c"]: 2,
+        }
+    )
     gapdh_to_pyk.bounds = (0, 1000)
     gapdh_to_pyk.gene_reaction_rule = "GAPDH and PGK1 and ENO1 and PKM"
     reactions.append(gapdh_to_pyk)
@@ -431,10 +521,12 @@ def create_sample_model():
     # Lactate dehydrogenase
     ldh = cobra.Reaction("LDH")
     ldh.name = "Lactate dehydrogenase"
-    ldh.add_metabolites({
-        metabolites["pyr_c"]: -1,
-        metabolites["lac_c"]: 1,
-    })
+    ldh.add_metabolites(
+        {
+            metabolites["pyr_c"]: -1,
+            metabolites["lac_c"]: 1,
+        }
+    )
     ldh.bounds = (-1000, 1000)
     ldh.gene_reaction_rule = "LDHA or LDHB"
     reactions.append(ldh)
@@ -442,10 +534,12 @@ def create_sample_model():
     # Lactate transport
     lac_transport = cobra.Reaction("LACt")
     lac_transport.name = "Lactate transport"
-    lac_transport.add_metabolites({
-        metabolites["lac_c"]: -1,
-        metabolites["lac_e"]: 1,
-    })
+    lac_transport.add_metabolites(
+        {
+            metabolites["lac_c"]: -1,
+            metabolites["lac_e"]: 1,
+        }
+    )
     lac_transport.bounds = (-1000, 1000)
     lac_transport.gene_reaction_rule = "SLC16A1 or SLC16A3"
     reactions.append(lac_transport)
@@ -466,10 +560,12 @@ def create_sample_model():
     # ATP maintenance (sink for ATP)
     atp_sink = cobra.Reaction("ATPM")
     atp_sink.name = "ATP maintenance"
-    atp_sink.add_metabolites({
-        metabolites["atp_c"]: -1,
-        metabolites["adp_c"]: 1,
-    })
+    atp_sink.add_metabolites(
+        {
+            metabolites["atp_c"]: -1,
+            metabolites["adp_c"]: 1,
+        }
+    )
     atp_sink.bounds = (0, 1000)
     reactions.append(atp_sink)
 

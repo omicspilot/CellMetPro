@@ -226,7 +226,7 @@ class CompassCache:
         """
         path = self._get_path(key, suffix=".json")
         if path.exists():
-            with open(path, "r") as f:
+            with open(path) as f:
                 return json.load(f)
         return None
 

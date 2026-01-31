@@ -158,7 +158,10 @@ class DataLoader:
 
         if genes_file is None:
             gene_file_names = [
-                "genes.tsv", "features.tsv", "genes.tsv.gz", "features.tsv.gz"
+                "genes.tsv",
+                "features.tsv",
+                "genes.tsv.gz",
+                "features.tsv.gz",
             ]
             for name in gene_file_names:
                 candidate = parent_dir / name
@@ -256,9 +259,7 @@ def normalize_expression(
         "log_transform": log_transform,
     }
 
-    logger.info(
-        f"Normalized expression (target_sum={target_sum}, log={log_transform})"
-    )
+    logger.info(f"Normalized expression (target_sum={target_sum}, log={log_transform})")
 
     return adata
 

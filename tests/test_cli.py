@@ -55,15 +55,23 @@ class TestCLI:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "run", "data.csv",
-            "-o", "output_dir",
-            "-m", "mouse",
-            "--beta", "0.9",
-            "-j", "4",
-            "--microcluster",
-            "--cells-per-cluster", "50",
-        ])
+        args = parser.parse_args(
+            [
+                "run",
+                "data.csv",
+                "-o",
+                "output_dir",
+                "-m",
+                "mouse",
+                "--beta",
+                "0.9",
+                "-j",
+                "4",
+                "--microcluster",
+                "--cells-per-cluster",
+                "50",
+            ]
+        )
 
         assert args.input == Path("data.csv")
         assert args.output == Path("output_dir")
@@ -102,19 +110,22 @@ class TestCLI:
 
         assert result == 1
 
-    def test_run_analysis_creates_output(
-        self, tmp_h5ad, tmp_model_json, tmp_path
-    ):
+    def test_run_analysis_creates_output(self, tmp_h5ad, tmp_model_json, tmp_path):
         """Test that run command creates output files."""
         from cellmetpro.cli import main
 
         output_dir = tmp_path / "results"
 
-        result = main([
-            "run", str(tmp_h5ad),
-            "-m", str(tmp_model_json),
-            "-o", str(output_dir),
-        ])
+        result = main(
+            [
+                "run",
+                str(tmp_h5ad),
+                "-m",
+                str(tmp_model_json),
+                "-o",
+                str(output_dir),
+            ]
+        )
 
         assert result == 0
         assert output_dir.exists()
@@ -128,39 +139,47 @@ class TestCLI:
         assert "beta" in config
         assert "n_cells" in config
 
-    def test_run_analysis_with_normalization(
-        self, tmp_h5ad, tmp_model_json, tmp_path
-    ):
+    def test_run_analysis_with_normalization(self, tmp_h5ad, tmp_model_json, tmp_path):
         """Test run command with normalization enabled."""
         from cellmetpro.cli import main
 
         output_dir = tmp_path / "results_norm"
 
-        result = main([
-            "run", str(tmp_h5ad),
-            "-m", str(tmp_model_json),
-            "-o", str(output_dir),
-            "--normalize",
-            "--target-sum", "10000",
-        ])
+        result = main(
+            [
+                "run",
+                str(tmp_h5ad),
+                "-m",
+                str(tmp_model_json),
+                "-o",
+                str(output_dir),
+                "--normalize",
+                "--target-sum",
+                "10000",
+            ]
+        )
 
         assert result == 0
         assert output_dir.exists()
 
-    def test_run_analysis_parquet_output(
-        self, tmp_h5ad, tmp_model_json, tmp_path
-    ):
+    def test_run_analysis_parquet_output(self, tmp_h5ad, tmp_model_json, tmp_path):
         """Test run command with parquet output format."""
         from cellmetpro.cli import main
 
         output_dir = tmp_path / "results_parquet"
 
-        result = main([
-            "run", str(tmp_h5ad),
-            "-m", str(tmp_model_json),
-            "-o", str(output_dir),
-            "--output-format", "parquet",
-        ])
+        result = main(
+            [
+                "run",
+                str(tmp_h5ad),
+                "-m",
+                str(tmp_model_json),
+                "-o",
+                str(output_dir),
+                "--output-format",
+                "parquet",
+            ]
+        )
 
         assert result == 0
         assert (output_dir / "reaction_penalties.parquet").exists()
@@ -174,13 +193,19 @@ class TestCLI:
 
         output_dir = tmp_path / "results_mc"
 
-        result = main([
-            "run", str(tmp_h5ad),
-            "-m", str(tmp_model_json),
-            "-o", str(output_dir),
-            "--microcluster",
-            "--cells-per-cluster", "2",
-        ])
+        result = main(
+            [
+                "run",
+                str(tmp_h5ad),
+                "-m",
+                str(tmp_model_json),
+                "-o",
+                str(output_dir),
+                "--microcluster",
+                "--cells-per-cluster",
+                "2",
+            ]
+        )
 
         assert result == 0
         assert output_dir.exists()
@@ -242,12 +267,19 @@ class TestDifferentialCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "differential", "scores.csv", "groups.csv",
-            "-o", "diff_results/",
-            "--method", "wilcoxon",
-            "--fdr-threshold", "0.01",
-        ])
+        args = parser.parse_args(
+            [
+                "differential",
+                "scores.csv",
+                "groups.csv",
+                "-o",
+                "diff_results/",
+                "--method",
+                "wilcoxon",
+                "--fdr-threshold",
+                "0.01",
+            ]
+        )
 
         assert args.command == "differential"
         assert args.scores == Path("scores.csv")
@@ -262,12 +294,18 @@ class TestDifferentialCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "differential", "scores.csv", "groups.csv",
-            "--group1", "control",
-            "--group2", "treatment",
-            "--plot",
-        ])
+        args = parser.parse_args(
+            [
+                "differential",
+                "scores.csv",
+                "groups.csv",
+                "--group1",
+                "control",
+                "--group2",
+                "treatment",
+                "--plot",
+            ]
+        )
 
         assert args.group1 == "control"
         assert args.group2 == "treatment"
@@ -280,10 +318,15 @@ class TestDifferentialCommand:
         parser = create_parser()
 
         for method in ["kruskal", "anova"]:
-            args = parser.parse_args([
-                "differential", "scores.csv", "groups.csv",
-                "--method", method,
-            ])
+            args = parser.parse_args(
+                [
+                    "differential",
+                    "scores.csv",
+                    "groups.csv",
+                    "--method",
+                    method,
+                ]
+            )
             assert args.method == method
 
 
@@ -296,13 +339,20 @@ class TestClusterCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "cluster", "scores.csv",
-            "-o", "cluster_results/",
-            "--n-clusters", "5",
-            "--method", "kmeans",
-            "--embedding", "umap",
-        ])
+        args = parser.parse_args(
+            [
+                "cluster",
+                "scores.csv",
+                "-o",
+                "cluster_results/",
+                "--n-clusters",
+                "5",
+                "--method",
+                "kmeans",
+                "--embedding",
+                "umap",
+            ]
+        )
 
         assert args.command == "cluster"
         assert args.scores == Path("scores.csv")
@@ -316,12 +366,17 @@ class TestClusterCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "cluster", "scores.csv",
-            "--method", "leiden",
-            "--resolution", "0.5",
-            "--plot",
-        ])
+        args = parser.parse_args(
+            [
+                "cluster",
+                "scores.csv",
+                "--method",
+                "leiden",
+                "--resolution",
+                "0.5",
+                "--plot",
+            ]
+        )
 
         assert args.method == "leiden"
         assert args.resolution == 0.5
@@ -334,10 +389,14 @@ class TestClusterCommand:
         parser = create_parser()
 
         for emb in ["umap", "tsne", "pca"]:
-            args = parser.parse_args([
-                "cluster", "scores.csv",
-                "--embedding", emb,
-            ])
+            args = parser.parse_args(
+                [
+                    "cluster",
+                    "scores.csv",
+                    "--embedding",
+                    emb,
+                ]
+            )
             assert args.embedding == emb
 
 
@@ -350,12 +409,18 @@ class TestPathwayCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "pathway", "reactions.txt",
-            "-o", "pathway_results/",
-            "--model", "human",
-            "--method", "subsystem",
-        ])
+        args = parser.parse_args(
+            [
+                "pathway",
+                "reactions.txt",
+                "-o",
+                "pathway_results/",
+                "--model",
+                "human",
+                "--method",
+                "subsystem",
+            ]
+        )
 
         assert args.command == "pathway"
         assert args.reactions == Path("reactions.txt")
@@ -368,13 +433,19 @@ class TestPathwayCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "pathway", "reactions.csv",
-            "--method", "go",
-            "--namespace", "biological_process",
-            "--fdr-threshold", "0.1",
-            "--plot",
-        ])
+        args = parser.parse_args(
+            [
+                "pathway",
+                "reactions.csv",
+                "--method",
+                "go",
+                "--namespace",
+                "biological_process",
+                "--fdr-threshold",
+                "0.1",
+                "--plot",
+            ]
+        )
 
         assert args.method == "go"
         assert args.namespace == "biological_process"
@@ -388,14 +459,22 @@ class TestPathwayCommand:
         parser = create_parser()
 
         namespaces = [
-            "biological_process", "molecular_function", "cellular_component", "all"
+            "biological_process",
+            "molecular_function",
+            "cellular_component",
+            "all",
         ]
         for ns in namespaces:
-            args = parser.parse_args([
-                "pathway", "reactions.txt",
-                "--method", "go",
-                "--namespace", ns,
-            ])
+            args = parser.parse_args(
+                [
+                    "pathway",
+                    "reactions.txt",
+                    "--method",
+                    "go",
+                    "--namespace",
+                    ns,
+                ]
+            )
             assert args.namespace == ns
 
     def test_pathway_go_annotations_arg(self):
@@ -404,11 +483,16 @@ class TestPathwayCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "pathway", "reactions.csv",
-            "--method", "go",
-            "--go-annotations", "annotations.gaf",
-        ])
+        args = parser.parse_args(
+            [
+                "pathway",
+                "reactions.csv",
+                "--method",
+                "go",
+                "--go-annotations",
+                "annotations.gaf",
+            ]
+        )
 
         assert args.method == "go"
         assert args.go_annotations == Path("annotations.gaf")
@@ -419,10 +503,14 @@ class TestPathwayCommand:
 
         parser = create_parser()
 
-        args = parser.parse_args([
-            "pathway", "reactions.txt",
-            "--method", "subsystem",
-        ])
+        args = parser.parse_args(
+            [
+                "pathway",
+                "reactions.txt",
+                "--method",
+                "subsystem",
+            ]
+        )
 
         assert args.go_annotations is None
 
@@ -467,13 +555,17 @@ class TestDifferentialIntegration:
 
         output_dir = tmp_path / "diff_output"
 
-        exit_code = main([
-            "differential",
-            str(mock_scores_file),
-            str(mock_groups_file),
-            "-o", str(output_dir),
-            "--method", "wilcoxon",
-        ])
+        exit_code = main(
+            [
+                "differential",
+                str(mock_scores_file),
+                str(mock_groups_file),
+                "-o",
+                str(output_dir),
+                "--method",
+                "wilcoxon",
+            ]
+        )
 
         assert exit_code == 0
         assert output_dir.exists()
@@ -487,13 +579,16 @@ class TestDifferentialIntegration:
 
         output_dir = tmp_path / "diff_output"
 
-        exit_code = main([
-            "differential",
-            str(mock_scores_file),
-            str(mock_groups_file),
-            "-o", str(output_dir),
-            "--plot",
-        ])
+        exit_code = main(
+            [
+                "differential",
+                str(mock_scores_file),
+                str(mock_groups_file),
+                "-o",
+                str(output_dir),
+                "--plot",
+            ]
+        )
 
         assert exit_code == 0
         # Check plot file exists
@@ -503,12 +598,15 @@ class TestDifferentialIntegration:
         """Test differential command with missing file."""
         from cellmetpro.cli import main
 
-        exit_code = main([
-            "differential",
-            str(tmp_path / "nonexistent.csv"),
-            str(tmp_path / "groups.csv"),
-            "-o", str(tmp_path / "output"),
-        ])
+        exit_code = main(
+            [
+                "differential",
+                str(tmp_path / "nonexistent.csv"),
+                str(tmp_path / "groups.csv"),
+                "-o",
+                str(tmp_path / "output"),
+            ]
+        )
         assert exit_code == 1
 
 
@@ -536,15 +634,22 @@ class TestClusterIntegration:
 
         output_dir = tmp_path / "cluster_output"
 
-        exit_code = main([
-            "cluster",
-            str(mock_scores_file),
-            "-o", str(output_dir),
-            "--n-clusters", "2",
-            "--method", "kmeans",
-            "--embedding", "pca",  # Use PCA for speed
-            "--n-pcs", "5",
-        ])
+        exit_code = main(
+            [
+                "cluster",
+                str(mock_scores_file),
+                "-o",
+                str(output_dir),
+                "--n-clusters",
+                "2",
+                "--method",
+                "kmeans",
+                "--embedding",
+                "pca",  # Use PCA for speed
+                "--n-pcs",
+                "5",
+            ]
+        )
 
         assert exit_code == 0
         assert output_dir.exists()
@@ -557,15 +662,21 @@ class TestClusterIntegration:
 
         output_dir = tmp_path / "cluster_output"
 
-        exit_code = main([
-            "cluster",
-            str(mock_scores_file),
-            "-o", str(output_dir),
-            "--n-clusters", "2",
-            "--embedding", "pca",
-            "--n-pcs", "5",
-            "--plot",
-        ])
+        exit_code = main(
+            [
+                "cluster",
+                str(mock_scores_file),
+                "-o",
+                str(output_dir),
+                "--n-clusters",
+                "2",
+                "--embedding",
+                "pca",
+                "--n-pcs",
+                "5",
+                "--plot",
+            ]
+        )
 
         assert exit_code == 0
         assert (output_dir / "embedding_plot.png").exists()
@@ -574,11 +685,14 @@ class TestClusterIntegration:
         """Test cluster command with missing file."""
         from cellmetpro.cli import main
 
-        exit_code = main([
-            "cluster",
-            str(tmp_path / "nonexistent.csv"),
-            "-o", str(tmp_path / "output"),
-        ])
+        exit_code = main(
+            [
+                "cluster",
+                str(tmp_path / "nonexistent.csv"),
+                "-o",
+                str(tmp_path / "output"),
+            ]
+        )
         assert exit_code == 1
 
 
@@ -609,26 +723,82 @@ class TestPathwayIntegration:
             "!gaf-version: 2.2",
             "!generated-by: test",
             # Proper 15-column GAF format
-            "\t".join([
-                "UniProtKB", "A0A001", "gene1", "",
-                "GO:0006096", "PMID:123", "IEA", "",
-                "P", "Gene 1", "G1", "protein", "taxon:9606", "20200101", "Test"
-            ]),
-            "\t".join([
-                "UniProtKB", "A0A001", "gene1", "",
-                "GO:0005737", "PMID:123", "IEA", "",
-                "C", "Gene 1", "G1", "protein", "taxon:9606", "20200101", "Test"
-            ]),
-            "\t".join([
-                "UniProtKB", "A0A002", "gene2", "",
-                "GO:0006096", "PMID:456", "IEA", "",
-                "P", "Gene 2", "G2", "protein", "taxon:9606", "20200101", "Test"
-            ]),
-            "\t".join([
-                "UniProtKB", "A0A003", "gene3", "",
-                "GO:0006099", "PMID:789", "IEA", "",
-                "P", "Gene 3", "G3", "protein", "taxon:9606", "20200101", "Test"
-            ]),
+            "\t".join(
+                [
+                    "UniProtKB",
+                    "A0A001",
+                    "gene1",
+                    "",
+                    "GO:0006096",
+                    "PMID:123",
+                    "IEA",
+                    "",
+                    "P",
+                    "Gene 1",
+                    "G1",
+                    "protein",
+                    "taxon:9606",
+                    "20200101",
+                    "Test",
+                ]
+            ),
+            "\t".join(
+                [
+                    "UniProtKB",
+                    "A0A001",
+                    "gene1",
+                    "",
+                    "GO:0005737",
+                    "PMID:123",
+                    "IEA",
+                    "",
+                    "C",
+                    "Gene 1",
+                    "G1",
+                    "protein",
+                    "taxon:9606",
+                    "20200101",
+                    "Test",
+                ]
+            ),
+            "\t".join(
+                [
+                    "UniProtKB",
+                    "A0A002",
+                    "gene2",
+                    "",
+                    "GO:0006096",
+                    "PMID:456",
+                    "IEA",
+                    "",
+                    "P",
+                    "Gene 2",
+                    "G2",
+                    "protein",
+                    "taxon:9606",
+                    "20200101",
+                    "Test",
+                ]
+            ),
+            "\t".join(
+                [
+                    "UniProtKB",
+                    "A0A003",
+                    "gene3",
+                    "",
+                    "GO:0006099",
+                    "PMID:789",
+                    "IEA",
+                    "",
+                    "P",
+                    "Gene 3",
+                    "G3",
+                    "protein",
+                    "taxon:9606",
+                    "20200101",
+                    "Test",
+                ]
+            ),
         ]
         path = tmp_path / "annotations.gaf"
         with open(path, "w") as f:
@@ -643,13 +813,18 @@ class TestPathwayIntegration:
 
         output_dir = tmp_path / "pathway_output"
 
-        exit_code = main([
-            "pathway",
-            str(mock_reactions_file),
-            "-o", str(output_dir),
-            "--model", str(tmp_model_json),
-            "--method", "subsystem",
-        ])
+        exit_code = main(
+            [
+                "pathway",
+                str(mock_reactions_file),
+                "-o",
+                str(output_dir),
+                "--model",
+                str(tmp_model_json),
+                "--method",
+                "subsystem",
+            ]
+        )
 
         assert exit_code == 0
         assert output_dir.exists()
@@ -663,13 +838,18 @@ class TestPathwayIntegration:
 
         output_dir = tmp_path / "pathway_output"
 
-        exit_code = main([
-            "pathway",
-            str(mock_reactions_file),
-            "-o", str(output_dir),
-            "--model", str(tmp_model_json),
-            "--method", "go",
-        ])
+        exit_code = main(
+            [
+                "pathway",
+                str(mock_reactions_file),
+                "-o",
+                str(output_dir),
+                "--model",
+                str(tmp_model_json),
+                "--method",
+                "go",
+            ]
+        )
 
         # Should succeed but fall back to subsystem
         assert exit_code == 0
@@ -684,14 +864,20 @@ class TestPathwayIntegration:
 
         output_dir = tmp_path / "pathway_output"
 
-        exit_code = main([
-            "pathway",
-            str(mock_reactions_file),
-            "-o", str(output_dir),
-            "--model", str(tmp_model_json),
-            "--method", "go",
-            "--go-annotations", str(mock_gaf_file),
-        ])
+        exit_code = main(
+            [
+                "pathway",
+                str(mock_reactions_file),
+                "-o",
+                str(output_dir),
+                "--model",
+                str(tmp_model_json),
+                "--method",
+                "go",
+                "--go-annotations",
+                str(mock_gaf_file),
+            ]
+        )
 
         assert exit_code == 0
         assert output_dir.exists()
@@ -701,9 +887,12 @@ class TestPathwayIntegration:
         """Test pathway command with missing file."""
         from cellmetpro.cli import main
 
-        exit_code = main([
-            "pathway",
-            str(tmp_path / "nonexistent.txt"),
-            "-o", str(tmp_path / "output"),
-        ])
+        exit_code = main(
+            [
+                "pathway",
+                str(tmp_path / "nonexistent.txt"),
+                "-o",
+                str(tmp_path / "output"),
+            ]
+        )
         assert exit_code == 1

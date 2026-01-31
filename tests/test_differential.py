@@ -11,20 +11,20 @@ from cellmetpro.analysis.differential import DifferentialAnalysis
 def reaction_scores():
     """Create mock reaction scores (reactions x cells)."""
     np.random.seed(42)
-    
+
     # 5 reactions, 10 cells
     reactions = ["R1", "R2", "R3", "R4", "R5"]
     cells = [f"cell_{i}" for i in range(10)]
-    
+
     # Create data where some reactions differ between groups
     data = np.random.rand(5, 10)
-    
+
     # Make R1 clearly higher in group B (cells 5-9)
     data[0, 5:10] += 2.0
-    
+
     # Make R2 clearly higher in group A (cells 0-4)
     data[1, 0:5] += 2.0
-    
+
     return pd.DataFrame(data, index=reactions, columns=cells)
 
 
@@ -38,6 +38,7 @@ def group_labels():
 
 ## TEST A: Basic output structure
 
+
 def test_compare_groups_returns_dataframe(reaction_scores, group_labels):
     """Test that compare_groups returns a DataFrame with expected columns."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
@@ -47,8 +48,16 @@ def test_compare_groups_returns_dataframe(reaction_scores, group_labels):
     assert isinstance(result, pd.DataFrame)
 
     # Check expected columns exist
-    expected_cols = ["reaction", "group1_mean", "group2_mean",
-                     "log2fc", "statistic", "pvalue", "padj_bh", "padj_bonf"]
+    expected_cols = [
+        "reaction",
+        "group1_mean",
+        "group2_mean",
+        "log2fc",
+        "statistic",
+        "pvalue",
+        "padj_bh",
+        "padj_bonf",
+    ]
     for col in expected_cols:
         assert col in result.columns
 
@@ -57,6 +66,7 @@ def test_compare_groups_returns_dataframe(reaction_scores, group_labels):
 
 
 ## TEST B: Results sorted by p-value
+
 
 def test_compare_groups_sorted_by_pvalue(reaction_scores, group_labels):
     """Test that results are sorted by p-value ascending."""
@@ -69,6 +79,7 @@ def test_compare_groups_sorted_by_pvalue(reaction_scores, group_labels):
 
 
 ## TEST C: All three statistical methods work
+
 
 @pytest.mark.parametrize("method", ["wilcoxon", "ttest", "mannwhitneyu"])
 def test_compare_groups_all_methods(reaction_scores, group_labels, method):
@@ -84,6 +95,7 @@ def test_compare_groups_all_methods(reaction_scores, group_labels, method):
 
 ## TEST D: Invalid method raises error
 
+
 def test_compare_groups_invalid_method(reaction_scores, group_labels):
     """Test that invalid method raises AssertionError."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
@@ -93,6 +105,7 @@ def test_compare_groups_invalid_method(reaction_scores, group_labels):
 
 
 ## TEST E: Log2FC direction is correct
+
 
 def test_compare_groups_log2fc_direction(reaction_scores, group_labels):
     """Test that log2fc sign correctly reflects direction of change.
@@ -114,6 +127,7 @@ def test_compare_groups_log2fc_direction(reaction_scores, group_labels):
 
 
 ## TEST F: P-value adjustments are valid
+
 
 def test_compare_groups_padj_bounds(reaction_scores, group_labels):
     """Test that all p-values are in valid range [0, 1]."""
@@ -149,13 +163,14 @@ def test_compare_groups_bonferroni_more_conservative(reaction_scores, group_labe
 
 ## TEST G: Means are calculated correctly
 
+
 def test_compare_groups_means_correct(reaction_scores, group_labels):
     """Test that group means match manual calculation."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
     result = da.compare_groups("A", "B")
 
     # Manually calculate expected means for R1
-    cells_a = [f"cell_{i}" for i in range(5)]      # group A
+    cells_a = [f"cell_{i}" for i in range(5)]  # group A
     cells_b = [f"cell_{i}" for i in range(5, 10)]  # group B
 
     expected_mean_a = reaction_scores.loc["R1", cells_a].mean()
@@ -169,6 +184,7 @@ def test_compare_groups_means_correct(reaction_scores, group_labels):
 
 ## TEST H: Partial cell overlap between scores and labels
 
+
 def test_compare_groups_partial_cell_overlap():
     """Test behavior when cells don't fully overlap between scores and labels.
 
@@ -181,14 +197,11 @@ def test_compare_groups_partial_cell_overlap():
     scores = pd.DataFrame(
         np.random.rand(3, 8),
         index=["R1", "R2", "R3"],
-        columns=[f"cell_{i}" for i in range(8)]
+        columns=[f"cell_{i}" for i in range(8)],
     )
 
     # Labels have cells 2-9 (overlap is cells 2-7, i.e., 6 cells)
-    labels = pd.Series(
-        ["A"] * 4 + ["B"] * 4,
-        index=[f"cell_{i}" for i in range(2, 10)]
-    )
+    labels = pd.Series(["A"] * 4 + ["B"] * 4, index=[f"cell_{i}" for i in range(2, 10)])
 
     da = DifferentialAnalysis(scores, labels)
     result = da.compare_groups("A", "B")
@@ -200,6 +213,7 @@ def test_compare_groups_partial_cell_overlap():
 
 
 ## TEST I: Significant reactions are detected
+
 
 def test_compare_groups_detects_significant_difference(reaction_scores, group_labels):
     """Test that reactions with clear differences have low p-values.
@@ -226,6 +240,7 @@ def test_compare_groups_detects_significant_difference(reaction_scores, group_la
 
 ## TEST J: rank_reactions returns correct structure
 
+
 def test_rank_reactions_returns_dataframe(reaction_scores, group_labels):
     """Test that rank_reactions returns a DataFrame with expected columns."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
@@ -233,13 +248,21 @@ def test_rank_reactions_returns_dataframe(reaction_scores, group_labels):
 
     assert isinstance(result, pd.DataFrame)
 
-    expected_cols = ["reaction", "mean_score", "std_score", "min_score",
-                     "max_score", "n_cells", "rank"]
+    expected_cols = [
+        "reaction",
+        "mean_score",
+        "std_score",
+        "min_score",
+        "max_score",
+        "n_cells",
+        "rank",
+    ]
     for col in expected_cols:
         assert col in result.columns
 
 
 ## TEST K: rank_reactions respects n_top parameter
+
 
 def test_rank_reactions_n_top(reaction_scores, group_labels):
     """Test that rank_reactions returns at most n_top reactions."""
@@ -255,6 +278,7 @@ def test_rank_reactions_n_top(reaction_scores, group_labels):
 
 ## TEST L: rank_reactions sorted by mean_score ascending
 
+
 def test_rank_reactions_sorted(reaction_scores, group_labels):
     """Test that results are sorted by mean_score ascending (lowest = most active)."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
@@ -269,6 +293,7 @@ def test_rank_reactions_sorted(reaction_scores, group_labels):
 
 ## TEST M: rank_reactions rank column is correct
 
+
 def test_rank_reactions_rank_column(reaction_scores, group_labels):
     """Test that rank column starts at 1 and increments."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
@@ -279,6 +304,7 @@ def test_rank_reactions_rank_column(reaction_scores, group_labels):
 
 
 ## TEST N: rank_reactions n_cells is correct
+
 
 def test_rank_reactions_n_cells(reaction_scores, group_labels):
     """Test that n_cells correctly counts cells in the group."""
@@ -296,6 +322,7 @@ def test_rank_reactions_n_cells(reaction_scores, group_labels):
 
 ## TEST O: compute_effect_size returns correct structure
 
+
 def test_compute_effect_size_returns_dataframe(reaction_scores, group_labels):
     """Test that compute_effect_size returns a DataFrame with expected columns."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
@@ -303,13 +330,21 @@ def test_compute_effect_size_returns_dataframe(reaction_scores, group_labels):
 
     assert isinstance(result, pd.DataFrame)
 
-    expected_cols = ["reaction", "cohens_d", "abs_cohens_d", "interpretation",
-                     "group1_mean", "group2_mean", "pooled_std"]
+    expected_cols = [
+        "reaction",
+        "cohens_d",
+        "abs_cohens_d",
+        "interpretation",
+        "group1_mean",
+        "group2_mean",
+        "pooled_std",
+    ]
     for col in expected_cols:
         assert col in result.columns
 
 
 ## TEST P: compute_effect_size sorted by absolute effect size
+
 
 def test_compute_effect_size_sorted(reaction_scores, group_labels):
     """Test results are sorted by abs_cohens_d descending (largest first)."""
@@ -322,6 +357,7 @@ def test_compute_effect_size_sorted(reaction_scores, group_labels):
 
 ## TEST Q: compute_effect_size interpretation is valid
 
+
 def test_compute_effect_size_interpretation(reaction_scores, group_labels):
     """Test that interpretation values are valid categories."""
     da = DifferentialAnalysis(reaction_scores, group_labels)
@@ -332,6 +368,7 @@ def test_compute_effect_size_interpretation(reaction_scores, group_labels):
 
 
 ## TEST R: compute_effect_size detects large effects
+
 
 def test_compute_effect_size_detects_large_effects(reaction_scores, group_labels):
     """Test that reactions with large differences have large effect sizes.
@@ -354,6 +391,7 @@ def test_compute_effect_size_detects_large_effects(reaction_scores, group_labels
 
 ## TEST S: compute_effect_size direction matches Cohen's d sign
 
+
 def test_compute_effect_size_direction(reaction_scores, group_labels):
     """Test that Cohen's d sign reflects which group has higher values.
 
@@ -374,6 +412,7 @@ def test_compute_effect_size_direction(reaction_scores, group_labels):
 
 
 ## TEST T: compute_effect_size abs_cohens_d matches cohens_d
+
 
 def test_compute_effect_size_abs_matches(reaction_scores, group_labels):
     """Test that abs_cohens_d is the absolute value of cohens_d."""
@@ -441,7 +480,12 @@ def test_compare_multiple_groups_returns_dataframe(
 
     # Check expected columns
     expected_cols = [
-        "reaction", "statistic", "pvalue", "n_groups", "padj_bh", "padj_bonf"
+        "reaction",
+        "statistic",
+        "pvalue",
+        "n_groups",
+        "padj_bh",
+        "padj_bonf",
     ]
     for col in expected_cols:
         assert col in result.columns
@@ -464,9 +508,7 @@ def test_compare_multiple_groups_kruskal(
     assert not result["pvalue"].isna().any()
 
 
-def test_compare_multiple_groups_anova(
-    multi_group_reaction_scores, multi_group_labels
-):
+def test_compare_multiple_groups_anova(multi_group_reaction_scores, multi_group_labels):
     """Test ANOVA method."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
     result = da.compare_multiple_groups(method="anova")
@@ -595,9 +637,7 @@ def test_posthoc_detects_significant_pairs(
     assert a_vs_c["padj"].iloc[0] < 0.05, "A vs C should be significant"
 
 
-def test_posthoc_invalid_reaction(
-    multi_group_reaction_scores, multi_group_labels
-):
+def test_posthoc_invalid_reaction(multi_group_reaction_scores, multi_group_labels):
     """Test error when reaction not found."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -605,9 +645,7 @@ def test_posthoc_invalid_reaction(
         da.posthoc_tests("nonexistent_reaction")
 
 
-def test_posthoc_invalid_method(
-    multi_group_reaction_scores, multi_group_labels
-):
+def test_posthoc_invalid_method(multi_group_reaction_scores, multi_group_labels):
     """Test error when invalid method specified."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -615,9 +653,7 @@ def test_posthoc_invalid_method(
         da.posthoc_tests("R1", method="invalid")
 
 
-def test_posthoc_pvalues_in_range(
-    multi_group_reaction_scores, multi_group_labels
-):
+def test_posthoc_pvalues_in_range(multi_group_reaction_scores, multi_group_labels):
     """Test that p-values are in valid range [0, 1]."""
     da = DifferentialAnalysis(multi_group_reaction_scores, multi_group_labels)
 
@@ -642,9 +678,7 @@ def test_all_pairwise_comparisons_returns_dataframe(
     assert isinstance(result, pd.DataFrame)
 
     # Check expected columns
-    expected_cols = [
-        "comparison", "reaction", "group1", "group2", "log2fc", "pvalue"
-    ]
+    expected_cols = ["comparison", "reaction", "group1", "group2", "log2fc", "pvalue"]
     for col in expected_cols:
         assert col in result.columns
 
@@ -701,7 +735,9 @@ class TestDifferentialEdgeCases:
             index=["R1"],
             columns=[f"cell_{i}" for i in range(10)],
         )
-        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+        labels = pd.Series(
+            ["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)]
+        )
 
         da = DifferentialAnalysis(scores, labels)
         result = da.compare_groups("A", "B")
@@ -733,7 +769,9 @@ class TestDifferentialEdgeCases:
             index=["R1"],
             columns=[f"cell_{i}" for i in range(10)],
         )
-        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+        labels = pd.Series(
+            ["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)]
+        )
 
         da = DifferentialAnalysis(scores, labels)
         # Should handle zero variance gracefully
@@ -752,7 +790,9 @@ class TestDifferentialEdgeCases:
             columns=[f"cell_{i}" for i in range(10)],
         )
         # Same data in both groups (no actual difference)
-        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+        labels = pd.Series(
+            ["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)]
+        )
 
         # Make values identical between groups for R1
         scores.loc["R1", "cell_0":"cell_4"] = 1.0
@@ -772,7 +812,9 @@ class TestDifferentialEdgeCases:
             index=["R1"],
             columns=[f"cell_{i}" for i in range(10)],
         )
-        labels = pd.Series(["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)])
+        labels = pd.Series(
+            ["A"] * 5 + ["B"] * 5, index=[f"cell_{i}" for i in range(10)]
+        )
 
         da = DifferentialAnalysis(scores, labels)
         result = da.compare_groups("A", "B")

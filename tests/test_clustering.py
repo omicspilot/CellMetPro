@@ -58,7 +58,7 @@ def test_compute_pca_returns_array(small_reaction_scores):
 
     assert isinstance(pca_result, np.ndarray)
     assert pca_result.shape[0] == 10  # 10 cells
-    assert pca_result.shape[1] == 2   # 2 components
+    assert pca_result.shape[1] == 2  # 2 components
 
 
 def test_compute_pca_caps_components(small_reaction_scores):
@@ -214,7 +214,7 @@ def test_to_dataframe(small_reaction_scores):
     assert "cell_id" in df.columns
     assert "cluster" in df.columns
     assert "dim_1" in df.columns  # From embedding
-    assert "PC1" in df.columns    # From PCA
+    assert "PC1" in df.columns  # From PCA
 
 
 def test_to_dataframe_without_clustering(small_reaction_scores):
@@ -266,7 +266,7 @@ def test_handles_nan_values():
     data = pd.DataFrame(
         [[1.0, np.nan, 2.0], [3.0, 4.0, np.nan]],
         index=["R1", "R2"],
-        columns=["c1", "c2", "c3"]
+        columns=["c1", "c2", "c3"],
     )
 
     mc = MetabolicClustering(data)
@@ -278,9 +278,7 @@ def test_handles_nan_values():
 def test_single_reaction():
     """Test with single reaction."""
     data = pd.DataFrame(
-        [[1.0, 2.0, 3.0, 4.0, 5.0]],
-        index=["R1"],
-        columns=[f"c{i}" for i in range(5)]
+        [[1.0, 2.0, 3.0, 4.0, 5.0]], index=["R1"], columns=[f"c{i}" for i in range(5)]
     )
 
     mc = MetabolicClustering(data)

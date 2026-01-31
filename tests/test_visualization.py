@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-matplotlib.use('Agg')  # Use non-interactive backend for testing
+matplotlib.use("Agg")  # Use non-interactive backend for testing
 import matplotlib.pyplot as plt
 
 from cellmetpro.visualization import (
@@ -27,14 +27,16 @@ def differential_results():
     np.random.seed(42)
     n_reactions = 50
 
-    return pd.DataFrame({
-        "reaction": [f"R{i}" for i in range(n_reactions)],
-        "log2fc": np.random.randn(n_reactions) * 2,
-        "pvalue": np.random.uniform(0.0001, 0.5, n_reactions),
-        "padj_bh": np.random.uniform(0.001, 0.6, n_reactions),
-        "group1_mean": np.random.rand(n_reactions),
-        "group2_mean": np.random.rand(n_reactions),
-    })
+    return pd.DataFrame(
+        {
+            "reaction": [f"R{i}" for i in range(n_reactions)],
+            "log2fc": np.random.randn(n_reactions) * 2,
+            "pvalue": np.random.uniform(0.0001, 0.5, n_reactions),
+            "padj_bh": np.random.uniform(0.001, 0.6, n_reactions),
+            "group1_mean": np.random.rand(n_reactions),
+            "group2_mean": np.random.rand(n_reactions),
+        }
+    )
 
 
 @pytest.fixture
@@ -65,13 +67,15 @@ def groups():
 @pytest.fixture
 def enrichment_results():
     """Create mock enrichment results."""
-    return pd.DataFrame({
-        "go_term": [f"GO:{i:07d}" for i in range(10)],
-        "go_name": [f"Process {i}" for i in range(10)],
-        "fold_enrichment": np.random.uniform(1.5, 5, 10),
-        "pvalue": np.random.uniform(0.0001, 0.1, 10),
-        "padj": np.random.uniform(0.001, 0.15, 10),
-    })
+    return pd.DataFrame(
+        {
+            "go_term": [f"GO:{i:07d}" for i in range(10)],
+            "go_name": [f"Process {i}" for i in range(10)],
+            "fold_enrichment": np.random.uniform(1.5, 5, 10),
+            "pvalue": np.random.uniform(0.0001, 0.1, 10),
+            "padj": np.random.uniform(0.001, 0.15, 10),
+        }
+    )
 
 
 # =============================================================================
@@ -93,7 +97,7 @@ def test_plot_volcano_custom_columns(differential_results):
         differential_results,
         log2fc_col="log2fc",
         pvalue_col="pvalue",
-        reaction_col="reaction"
+        reaction_col="reaction",
     )
 
     assert isinstance(ax, plt.Axes)
@@ -102,11 +106,7 @@ def test_plot_volcano_custom_columns(differential_results):
 
 def test_plot_volcano_custom_thresholds(differential_results):
     """Test volcano plot with custom thresholds."""
-    ax = plot_volcano(
-        differential_results,
-        log2fc_threshold=0.5,
-        pvalue_threshold=0.1
-    )
+    ax = plot_volcano(differential_results, log2fc_threshold=0.5, pvalue_threshold=0.1)
 
     assert isinstance(ax, plt.Axes)
     plt.close()
@@ -114,10 +114,7 @@ def test_plot_volcano_custom_thresholds(differential_results):
 
 def test_plot_volcano_with_highlight(differential_results):
     """Test volcano plot with highlighted reactions."""
-    ax = plot_volcano(
-        differential_results,
-        highlight=["R0", "R1", "R2"]
-    )
+    ax = plot_volcano(differential_results, highlight=["R0", "R1", "R2"])
 
     assert isinstance(ax, plt.Axes)
     plt.close()
@@ -204,10 +201,7 @@ def test_plot_reaction_heatmap_with_groups(reaction_scores, groups):
 
 def test_plot_reaction_heatmap_specific_reactions(reaction_scores):
     """Test heatmap with specific reactions."""
-    fig = plot_reaction_heatmap(
-        reaction_scores,
-        reactions=["R0", "R1", "R2"]
-    )
+    fig = plot_reaction_heatmap(reaction_scores, reactions=["R0", "R1", "R2"])
 
     assert isinstance(fig, plt.Figure)
     plt.close()
@@ -223,11 +217,7 @@ def test_plot_grouped_heatmap(reaction_scores, groups):
 
 def test_plot_grouped_heatmap_specific_features(reaction_scores, groups):
     """Test grouped heatmap with specific features."""
-    ax = plot_grouped_heatmap(
-        reaction_scores,
-        groups,
-        features=["R0", "R1", "R2"]
-    )
+    ax = plot_grouped_heatmap(reaction_scores, groups, features=["R0", "R1", "R2"])
 
     assert isinstance(ax, plt.Axes)
     plt.close()
@@ -248,11 +238,7 @@ def test_plot_reaction_dotplot_returns_axes(reaction_scores, groups):
 
 def test_plot_reaction_dotplot_specific_reactions(reaction_scores, groups):
     """Test dotplot with specific reactions."""
-    ax = plot_reaction_dotplot(
-        reaction_scores,
-        groups,
-        reactions=["R0", "R1", "R2"]
-    )
+    ax = plot_reaction_dotplot(reaction_scores, groups, reactions=["R0", "R1", "R2"])
 
     assert isinstance(ax, plt.Axes)
     plt.close()
@@ -273,7 +259,7 @@ def test_plot_enrichment_dotplot_custom_columns(enrichment_results):
         term_col="go_term",
         name_col="go_name",
         pvalue_col="padj",
-        fold_col="fold_enrichment"
+        fold_col="fold_enrichment",
     )
 
     assert isinstance(ax, plt.Axes)
@@ -287,11 +273,13 @@ def test_plot_enrichment_dotplot_custom_columns(enrichment_results):
 
 def test_volcano_empty_significant():
     """Test volcano plot with no significant points."""
-    df = pd.DataFrame({
-        "reaction": ["R1", "R2"],
-        "log2fc": [0.1, 0.2],
-        "padj_bh": [0.9, 0.8],  # All non-significant
-    })
+    df = pd.DataFrame(
+        {
+            "reaction": ["R1", "R2"],
+            "log2fc": [0.1, 0.2],
+            "padj_bh": [0.9, 0.8],  # All non-significant
+        }
+    )
 
     ax = plot_volcano(df)
     assert isinstance(ax, plt.Axes)
@@ -309,13 +297,15 @@ def test_heatmap_single_group(reaction_scores):
 
 def test_enrichment_dotplot_no_significant():
     """Test enrichment dotplot with no significant terms."""
-    df = pd.DataFrame({
-        "go_term": ["GO:0000001"],
-        "go_name": ["Test"],
-        "fold_enrichment": [1.5],
-        "pvalue": [0.5],
-        "padj": [0.8],  # Not significant
-    })
+    df = pd.DataFrame(
+        {
+            "go_term": ["GO:0000001"],
+            "go_name": ["Test"],
+            "fold_enrichment": [1.5],
+            "pvalue": [0.5],
+            "padj": [0.8],  # Not significant
+        }
+    )
 
     ax = plot_enrichment_dotplot(df, pvalue_threshold=0.05)
     assert isinstance(ax, plt.Axes)
@@ -364,9 +354,7 @@ def test_plot_reaction_violin_specific_reactions(reaction_scores, groups):
     """Test violin plot with specific reactions."""
     from cellmetpro.visualization import plot_reaction_violin
 
-    fig = plot_reaction_violin(
-        reaction_scores, groups, reactions=["R0", "R1", "R2"]
-    )
+    fig = plot_reaction_violin(reaction_scores, groups, reactions=["R0", "R1", "R2"])
 
     assert isinstance(fig, plt.Figure)
     plt.close()
@@ -376,9 +364,7 @@ def test_plot_reaction_violin_horizontal(reaction_scores, groups):
     """Test horizontal violin plot."""
     from cellmetpro.visualization import plot_reaction_violin
 
-    fig = plot_reaction_violin(
-        reaction_scores, groups, n_top=3, orient="h"
-    )
+    fig = plot_reaction_violin(reaction_scores, groups, n_top=3, orient="h")
 
     assert isinstance(fig, plt.Figure)
     plt.close()
@@ -408,9 +394,7 @@ def test_plot_single_reaction_violin_with_points(reaction_scores, groups):
     """Test single reaction violin with overlaid points."""
     from cellmetpro.visualization import plot_single_reaction_violin
 
-    ax = plot_single_reaction_violin(
-        reaction_scores, groups, "R0", show_points=True
-    )
+    ax = plot_single_reaction_violin(reaction_scores, groups, "R0", show_points=True)
 
     assert isinstance(ax, plt.Axes)
     plt.close()
@@ -528,9 +512,7 @@ def test_plot_stacked_bar_not_normalized(reaction_scores, groups, subsystem_mapp
     """Test stacked bar chart without normalization."""
     from cellmetpro.visualization import plot_stacked_bar
 
-    ax = plot_stacked_bar(
-        reaction_scores, groups, subsystem_mapping, normalize=False
-    )
+    ax = plot_stacked_bar(reaction_scores, groups, subsystem_mapping, normalize=False)
 
     assert isinstance(ax, plt.Axes)
     plt.close()
@@ -592,9 +574,7 @@ def test_plot_radar_specific_reactions(reaction_scores, groups):
     """Test radar plot with specific reactions."""
     from cellmetpro.visualization import plot_radar
 
-    ax = plot_radar(
-        reaction_scores, groups, reactions=["R0", "R1", "R2", "R3", "R4"]
-    )
+    ax = plot_radar(reaction_scores, groups, reactions=["R0", "R1", "R2", "R3", "R4"])
 
     assert isinstance(ax, plt.Axes)
     plt.close()
@@ -674,7 +654,7 @@ def test_plot_waterfall_custom_colors(differential_results):
         differential_results,
         up_color="#FF0000",
         down_color="#0000FF",
-        ns_color="#CCCCCC"
+        ns_color="#CCCCCC",
     )
 
     assert isinstance(ax, plt.Axes)
@@ -702,7 +682,7 @@ def test_plot_subsystem_waterfall_custom_columns(enrichment_results):
         enrichment_results,
         fold_col="fold_enrichment",
         term_col="go_name",
-        pvalue_col="padj"
+        pvalue_col="padj",
     )
 
     assert isinstance(ax, plt.Axes)
@@ -726,9 +706,7 @@ def test_stacked_bar_save(reaction_scores, groups, subsystem_mapping, tmp_path):
     from cellmetpro.visualization import plot_stacked_bar
 
     save_path = tmp_path / "stacked_bar.png"
-    plot_stacked_bar(
-        reaction_scores, groups, subsystem_mapping, save=str(save_path)
-    )
+    plot_stacked_bar(reaction_scores, groups, subsystem_mapping, save=str(save_path))
 
     assert save_path.exists()
     plt.close()

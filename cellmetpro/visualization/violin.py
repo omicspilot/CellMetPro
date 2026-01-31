@@ -407,10 +407,12 @@ def plot_single_reaction_violin(
     group_labels = groups[common_cells]
 
     # Prepare data
-    data = pd.DataFrame({
-        "score": scores.values,
-        "group": group_labels.values,
-    })
+    data = pd.DataFrame(
+        {
+            "score": scores.values,
+            "group": group_labels.values,
+        }
+    )
 
     fig, ax = plt.subplots(figsize=figsize)
 

@@ -624,6 +624,79 @@ class TestModelLoading:
 # ============================================================================
 
 
+class TestCompassPenaltySmoothing:
+    """Tests for COMPASS penalty smoothing functionality."""
+
+    def test_penalty_smoothing(self, simple_model, expression_df):
+        """Test KNN-based penalty smoothing."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(
+            lambda_penalty=0.5, n_neighbors=2, show_progress=False
+        )
+        scorer = CompassScorer(simple_model, expression_df, config)
+        penalties = scorer.compute_reaction_penalties()
+
+        assert penalties is not None
+        # Smoothed penalties should still be in valid range
+        assert penalties.min().min() >= 0
+        assert penalties.max().max() <= 1
+
+    def test_penalty_smoothing_zero_lambda(self, simple_model, expression_df):
+        """Test that zero lambda means no smoothing."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        # With no smoothing
+        config1 = CompassConfig(lambda_penalty=0.0, show_progress=False)
+        scorer1 = CompassScorer(simple_model, expression_df, config1)
+        penalties1 = scorer1.compute_reaction_penalties()
+
+        # Re-run with same config (should be identical)
+        config2 = CompassConfig(lambda_penalty=0.0, show_progress=False)
+        scorer2 = CompassScorer(simple_model, expression_df, config2)
+        penalties2 = scorer2.compute_reaction_penalties()
+
+        pd.testing.assert_frame_equal(penalties1, penalties2)
+
+
+class TestRunCompassFunction:
+    """Tests for the run_compass convenience function."""
+
+    def test_run_compass_basic(self, simple_model, expression_df):
+        """Test run_compass with basic inputs."""
+        from cellmetpro.core.compass import CompassConfig, run_compass
+
+        config = CompassConfig(show_progress=False)
+        result = run_compass(simple_model, expression_df, config)
+
+        assert result is not None
+        assert result.reaction_penalties is not None
+        assert result.reaction_scores is not None
+
+    def test_run_compass_with_exchange(self, simple_model, expression_df):
+        """Test run_compass with exchange score computation."""
+        from cellmetpro.core.compass import CompassConfig, run_compass
+
+        config = CompassConfig(show_progress=False)
+        result = run_compass(
+            simple_model, expression_df, config, compute_exchange=True
+        )
+
+        assert result is not None
+        assert result.uptake_scores is not None
+        assert result.secretion_scores is not None
+
+    def test_run_compass_no_config(self, simple_model, expression_df):
+        """Test run_compass without explicit config."""
+        from cellmetpro.core.compass import run_compass
+
+        result = run_compass(simple_model, expression_df, config=None)
+
+        assert result is not None
+        # Should use default config
+        assert result.config.beta == 0.95
+
+
 class TestIntegration:
     """Integration tests combining multiple modules."""
 
@@ -631,7 +704,7 @@ class TestIntegration:
         """Test full COMPASS pipeline."""
         from cellmetpro.core.compass import CompassConfig, run_compass
 
-        config = CompassConfig(beta=0.95, n_processes=1)
+        config = CompassConfig(beta=0.95, n_processes=1, show_progress=False)
         result = run_compass(simple_model, expression_df, config)
 
         assert result is not None
@@ -641,9 +714,10 @@ class TestIntegration:
 
     def test_compass_with_adata(self, simple_model, adata):
         """Test COMPASS with AnnData input."""
-        from cellmetpro.core.compass import CompassScorer
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
 
-        scorer = CompassScorer(simple_model, adata)
+        config = CompassConfig(show_progress=False)
+        scorer = CompassScorer(simple_model, adata, config)
         penalties = scorer.compute_reaction_penalties()
 
         assert penalties is not None
@@ -796,6 +870,163 @@ class TestCompassScorerEdgeCases:
 # ============================================================================
 # COMPASS Performance and Optimization Tests
 # ============================================================================
+
+
+class TestCompassScoreAndOptimize:
+    """Tests for COMPASS score() and optimize_reactions() methods."""
+
+    def test_score_basic(self, simple_model, expression_df):
+        """Test the score() method returns complete results."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+        result = scorer.score()
+
+        assert result is not None
+        assert result.reaction_penalties is not None
+        assert result.reaction_scores is not None
+        assert result.config.beta == 0.95
+
+    def test_score_with_exchange(self, simple_model, expression_df):
+        """Test score() with exchange reaction scoring."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+        result = scorer.score(compute_exchange=True)
+
+        assert result is not None
+        assert result.uptake_scores is not None
+        assert result.secretion_scores is not None
+        assert isinstance(result.uptake_scores, pd.DataFrame)
+        assert isinstance(result.secretion_scores, pd.DataFrame)
+
+    def test_optimize_reactions_basic(self, simple_model, expression_df):
+        """Test optimize_reactions() directly."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(show_progress=False, cache_max_fluxes=True)
+        scorer = CompassScorer(simple_model, expression_df, config)
+
+        penalties = scorer.compute_reaction_penalties()
+        scores = scorer.optimize_reactions(penalties)
+
+        assert scores is not None
+        assert isinstance(scores, pd.DataFrame)
+        assert scores.shape[1] == len(expression_df.columns)  # Same number of cells
+
+    def test_optimize_reactions_without_penalties(self, simple_model, expression_df):
+        """Test optimize_reactions() computes penalties if not provided."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+
+        # Call without penalties - should compute them internally
+        scores = scorer.optimize_reactions(penalties=None)
+
+        assert scores is not None
+        assert isinstance(scores, pd.DataFrame)
+
+    def test_optimize_with_batch_processing(self, simple_model):
+        """Test optimization with batch processing."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        # Create larger expression data
+        np.random.seed(42)
+        genes = ["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"]
+        cells = [f"cell{i}" for i in range(15)]
+        expr_df = pd.DataFrame(
+            np.random.rand(5, 15) * 100,
+            index=genes,
+            columns=cells,
+        )
+
+        config = CompassConfig(batch_size=5, show_progress=False)
+        scorer = CompassScorer(simple_model, expr_df, config)
+        result = scorer.score()
+
+        assert result.reaction_scores.shape[1] == 15
+
+    def test_precompute_max_fluxes(self, simple_model, expression_df):
+        """Test that max fluxes are precomputed correctly."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(cache_max_fluxes=True, show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+
+        # Compute penalties first
+        penalties = scorer.compute_reaction_penalties()
+
+        # Get internal reactions
+        internal_reactions = [
+            rxn.id
+            for rxn in simple_model.reactions
+            if rxn.id in penalties.index and not rxn.boundary
+        ]
+
+        # Precompute max fluxes
+        model_copy = simple_model.copy()
+        scorer._precompute_max_fluxes(model_copy, internal_reactions)
+
+        # Check cache is populated
+        assert len(scorer._max_flux_cache) > 0
+        for rxn_id in internal_reactions:
+            assert rxn_id in scorer._max_flux_cache
+            assert scorer._max_flux_cache[rxn_id] >= 0
+
+    def test_reaction_scores_property(self, simple_model, expression_df):
+        """Test the reaction_scores property."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+
+        # Access property - should trigger computation
+        scores = scorer.reaction_scores
+
+        assert scores is not None
+        assert isinstance(scores, pd.DataFrame)
+
+    def test_reaction_penalties_property(self, simple_model, expression_df):
+        """Test the reaction_penalties property."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+
+        # Access property - should trigger computation
+        penalties = scorer.reaction_penalties
+
+        assert penalties is not None
+        assert isinstance(penalties, pd.DataFrame)
+
+    def test_score_config_preserved(self, simple_model, expression_df):
+        """Test that config is preserved in result."""
+        from cellmetpro.core.compass import CompassConfig, CompassScorer
+
+        config = CompassConfig(beta=0.9, lambda_penalty=0.1, show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+        result = scorer.score()
+
+        assert result.config.beta == 0.9
+        assert result.config.lambda_penalty == 0.1
+
+    def test_compass_result_dataclass(self, simple_model, expression_df):
+        """Test CompassResult dataclass structure."""
+        from cellmetpro.core.compass import CompassConfig, CompassResult, CompassScorer
+
+        config = CompassConfig(show_progress=False)
+        scorer = CompassScorer(simple_model, expression_df, config)
+        result = scorer.score()
+
+        assert isinstance(result, CompassResult)
+        assert hasattr(result, "reaction_penalties")
+        assert hasattr(result, "reaction_scores")
+        assert hasattr(result, "uptake_scores")
+        assert hasattr(result, "secretion_scores")
+        assert hasattr(result, "config")
 
 
 class TestCompassOptimizations:
@@ -955,6 +1186,231 @@ class TestCompassOptimizations:
 # ============================================================================
 # Edge Case Tests - FluxBalanceAnalyzer
 # ============================================================================
+
+
+class TestFBAAdvanced:
+    """Advanced tests for FluxBalanceAnalyzer methods."""
+
+    def test_parsimonious_fba(self, simple_model):
+        """Test parsimonious FBA (pFBA)."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fluxes = fba.parsimonious_fba(fraction_of_optimum=1.0)
+
+        assert fluxes is not None
+        assert isinstance(fluxes, pd.Series)
+        assert fba.solution is not None
+        assert fba.solution.status == "optimal"
+
+    def test_parsimonious_fba_partial_optimum(self, simple_model):
+        """Test pFBA with fraction of optimum."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fluxes = fba.parsimonious_fba(fraction_of_optimum=0.9)
+
+        assert fluxes is not None
+        assert isinstance(fluxes, pd.Series)
+
+    def test_get_exchange_fluxes(self, simple_model):
+        """Test getting exchange reaction fluxes."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        exchange_fluxes = fba.get_exchange_fluxes()
+
+        assert exchange_fluxes is not None
+        assert isinstance(exchange_fluxes, pd.Series)
+        # Should include EX_A and EX_C
+        assert len(exchange_fluxes) > 0
+
+    def test_get_exchange_fluxes_after_optimize(self, simple_model):
+        """Test exchange fluxes after explicit optimization."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fba.optimize()
+        exchange_fluxes = fba.get_exchange_fluxes()
+
+        assert exchange_fluxes is not None
+        # Exchange reactions should have specific IDs
+        exchange_ids = [rxn.id for rxn in fba.model.exchanges]
+        assert set(exchange_fluxes.index) == set(exchange_ids)
+
+    def test_gene_knockout(self, simple_model):
+        """Test gene knockout analysis."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        # gene1 is used by R1 and R3
+        fluxes = fba.gene_knockout("gene1")
+
+        assert fluxes is not None
+        assert isinstance(fluxes, pd.Series)
+
+    def test_gene_knockout_multiple(self, simple_model):
+        """Test knockout of multiple genes."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fluxes = fba.gene_knockout(["gene1", "gene2"])
+
+        assert fluxes is not None
+        assert isinstance(fluxes, pd.Series)
+
+    def test_optimize_with_custom_objective(self, simple_model):
+        """Test optimization with custom objective."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fluxes = fba.optimize(objective="R1", direction="max")
+
+        assert fluxes is not None
+        assert fba.solution is not None
+
+    def test_optimize_minimize(self, simple_model):
+        """Test minimization."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fluxes = fba.optimize(direction="min")
+
+        assert fluxes is not None
+        assert fba.solution is not None
+
+    def test_summary_optimal(self, simple_model):
+        """Test summary after optimization."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fba.optimize()
+        summary = fba.summary()
+
+        assert "FBA Solution Summary" in summary
+        assert "optimal" in summary.lower()
+        assert "Objective value" in summary
+        assert "Top 10 reactions" in summary
+
+    def test_reset_bounds_all(self, simple_model):
+        """Test resetting all reaction bounds."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+
+        # Store original bounds
+        r1_orig = fba.model.reactions.get_by_id("R1").upper_bound
+        r2_orig = fba.model.reactions.get_by_id("R2").upper_bound
+
+        # Modify multiple reactions
+        fba.set_bounds("R1", upper=50)
+        fba.set_bounds("R2", upper=75)
+
+        # Reset all
+        fba.reset_bounds()
+
+        # Verify all restored
+        assert fba.model.reactions.get_by_id("R1").upper_bound == r1_orig
+        assert fba.model.reactions.get_by_id("R2").upper_bound == r2_orig
+        assert len(fba._original_bounds) == 0
+
+    def test_flux_variability_all_reactions(self, simple_model):
+        """Test FVA on all reactions (reactions=None)."""
+        from cellmetpro.core.fba import FluxBalanceAnalyzer
+
+        fba = FluxBalanceAnalyzer(simple_model)
+        fva = fba.flux_variability(reactions=None, fraction_of_optimum=0.9)
+
+        assert fva is not None
+        assert "minimum" in fva.columns
+        assert "maximum" in fva.columns
+        # Should have entries for all reactions
+        assert len(fva) == len(simple_model.reactions)
+
+
+class TestFBAStandaloneFunctions:
+    """Tests for standalone FBA utility functions."""
+
+    def test_compute_yield(self, simple_model):
+        """Test theoretical yield computation."""
+        from cellmetpro.core.fba import compute_yield
+
+        # EX_C is product, EX_A is substrate
+        yield_value = compute_yield(
+            simple_model,
+            product_reaction="EX_C",
+            substrate_reaction="EX_A",
+            substrate_uptake=10.0,
+        )
+
+        assert yield_value is not None
+        assert isinstance(yield_value, float)
+        assert yield_value >= 0
+
+    def test_compute_yield_zero_uptake_error(self, simple_model):
+        """Test yield computation raises error for zero uptake."""
+        from cellmetpro.core.fba import compute_yield
+
+        with pytest.raises(ValueError, match="must be positive"):
+            compute_yield(
+                simple_model,
+                product_reaction="EX_C",
+                substrate_reaction="EX_A",
+                substrate_uptake=0.0,
+            )
+
+    def test_compute_yield_negative_uptake_error(self, simple_model):
+        """Test yield computation raises error for negative uptake."""
+        from cellmetpro.core.fba import compute_yield
+
+        with pytest.raises(ValueError, match="must be positive"):
+            compute_yield(
+                simple_model,
+                product_reaction="EX_C",
+                substrate_reaction="EX_A",
+                substrate_uptake=-5.0,
+            )
+
+    def test_find_blocked_reactions(self, simple_model):
+        """Test finding blocked reactions."""
+        from cellmetpro.core.fba import find_blocked_reactions
+
+        blocked = find_blocked_reactions(simple_model)
+
+        assert isinstance(blocked, list)
+        # In our simple model, all reactions can carry flux
+
+    def test_find_essential_reactions(self, simple_model):
+        """Test finding essential reactions."""
+        from cellmetpro.core.fba import find_essential_reactions
+
+        essential = find_essential_reactions(simple_model, threshold=0.01)
+
+        assert isinstance(essential, list)
+        # Essential reactions are those whose knockout kills growth
+
+    def test_apply_media(self, simple_model):
+        """Test applying media constraints."""
+        from cellmetpro.core.fba import apply_media
+
+        media = {"EX_A": 5.0}  # Allow uptake of 5 units of A
+        model_with_media = apply_media(simple_model, media, default_uptake=0.0)
+
+        assert model_with_media is not None
+        # Check that EX_A has the correct bound
+        ex_a = model_with_media.reactions.get_by_id("EX_A")
+        assert ex_a.lower_bound == -5.0
+
+    def test_apply_media_default_uptake(self, simple_model):
+        """Test applying media with default uptake."""
+        from cellmetpro.core.fba import apply_media
+
+        media = {"EX_A": 10.0}
+        model_with_media = apply_media(simple_model, media, default_uptake=1.0)
+
+        assert model_with_media is not None
+        # Original model is not modified
+        assert simple_model.reactions.get_by_id("EX_A").lower_bound == -10
 
 
 class TestFBAEdgeCases:

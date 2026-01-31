@@ -225,6 +225,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Links
 
-- **Documentation**: [omicspilot.com/projects/cellmetpro](https://omicspilot.com/projects/cellmetpro)
-- **Source Code**: [github.com/omicspilot/CellMetPro](https://github.com/omicspilot/CellMetPro)
 - **Issues**: [github.com/omicspilot/CellMetPro/issues](https://github.com/omicspilot/CellMetPro/issues)
+- [![CI](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml/badge.svg)](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml)
+- [![codecov](https://codecov.io/gh/omicspilot/CellMetPro/branch/main/graph/badge.svg)](https://codecov.io/gh/omicspilot/CellMetPro)
+
+- [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

@@ -57,6 +57,9 @@ Examples:
   cellmetpro run large_data.h5ad --microcluster --cells-per-cluster 100
   cellmetpro differential scores.csv groups.csv --plot
   cellmetpro cluster scores.csv --method leiden --embedding umap
+  cellmetpro report results/ -o my_report.html
+  cellmetpro batch-correct scores.csv batches.csv --method harmony
+  cellmetpro trajectory scores.csv --compute-velocity --differential
   cellmetpro dashboard results/
 """,
     )
@@ -422,6 +425,124 @@ Examples:
         "--interactive",
         action="store_true",
         help="Generate interactive HTML plots (requires --plot)",
+    )
+
+    # Report generation command
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Generate HTML report from analysis results",
+        description="Generate a comprehensive HTML report summarizing analysis results",
+        formatter_class=RichHelpFormatter,
+    )
+    report_parser.add_argument(
+        "results",
+        type=Path,
+        help="Path to results directory from 'run' command",
+    )
+    report_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        help="Output HTML file (default: results/report.html)",
+    )
+    report_parser.add_argument(
+        "--n-top-diff",
+        type=int,
+        default=20,
+        help="Number of top differential reactions to show (default: 20)",
+    )
+    report_parser.add_argument(
+        "--no-figures",
+        action="store_true",
+        help="Exclude embedded figures from report",
+    )
+
+    # Batch correction command
+    batch_parser = subparsers.add_parser(
+        "batch-correct",
+        help="Apply batch correction to reaction scores",
+        description="Correct batch effects in multi-sample metabolic data",
+        formatter_class=RichHelpFormatter,
+    )
+    batch_parser.add_argument(
+        "scores",
+        type=Path,
+        help="Reaction scores file (CSV with reactions x cells)",
+    )
+    batch_parser.add_argument(
+        "batches",
+        type=Path,
+        help="Batch labels file (CSV with cell_id and batch columns)",
+    )
+    batch_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path("batch_corrected"),
+        help="Output directory (default: batch_corrected/)",
+    )
+    batch_parser.add_argument(
+        "--method",
+        choices=["harmony", "combat", "center"],
+        default="combat",
+        help="Batch correction method (default: combat)",
+    )
+    batch_parser.add_argument(
+        "--cell-labels",
+        type=Path,
+        help="Cell type labels file for integration quality metrics",
+    )
+
+    # Trajectory analysis command
+    traj_parser = subparsers.add_parser(
+        "trajectory",
+        help="Perform trajectory/pseudotime analysis",
+        description="Analyze metabolic changes along cellular trajectories",
+        formatter_class=RichHelpFormatter,
+    )
+    traj_parser.add_argument(
+        "scores",
+        type=Path,
+        help="Reaction scores file (CSV with reactions x cells)",
+    )
+    traj_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path("trajectory_results"),
+        help="Output directory (default: trajectory_results/)",
+    )
+    traj_parser.add_argument(
+        "--root-cell",
+        type=str,
+        help="Root cell ID for pseudotime (auto-detect if not specified)",
+    )
+    traj_parser.add_argument(
+        "--method",
+        choices=["dpt", "principal_curve", "correlation"],
+        default="dpt",
+        help="Pseudotime inference method (default: dpt)",
+    )
+    traj_parser.add_argument(
+        "--compute-velocity",
+        action="store_true",
+        help="Also compute metabolic velocity",
+    )
+    traj_parser.add_argument(
+        "--window-size",
+        type=int,
+        default=50,
+        help="Window size for velocity computation (default: 50)",
+    )
+    traj_parser.add_argument(
+        "--differential",
+        action="store_true",
+        help="Run trajectory differential analysis",
+    )
+    traj_parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Generate trajectory plots",
     )
 
     return parser
@@ -1089,6 +1210,301 @@ def run_pathway(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_report(args: argparse.Namespace) -> int:
+    """Generate HTML report from analysis results.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+    """
+    from cellmetpro.reporting import generate_html_report
+
+    logger.info("CellMetPro Report Generation")
+    logger.info("=" * 50)
+
+    if not args.results.exists():
+        logger.error(f"Results directory not found: {args.results}")
+        return 1
+
+    logger.info(f"Generating report from: {args.results}")
+
+    output_path = args.output if args.output else args.results / "report.html"
+
+    try:
+        report_path = generate_html_report(
+            args.results,
+            output_path,
+            n_top_diff=args.n_top_diff,
+            include_figures=not args.no_figures,
+        )
+        logger.info(f"Report generated: {report_path}")
+    except Exception as e:
+        logger.error(f"Failed to generate report: {e}")
+        return 1
+
+    return 0
+
+
+def run_batch_correct(args: argparse.Namespace) -> int:
+    """Run batch correction on reaction scores.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+    """
+    import json
+
+    import pandas as pd
+
+    from cellmetpro.core.batch_correction import (
+        center_batches,
+        combat_correct,
+        compute_integration_metrics,
+        harmony_integrate,
+    )
+
+    logger.info("CellMetPro Batch Correction")
+    logger.info("=" * 50)
+
+    # Load reaction scores
+    logger.info(f"Loading reaction scores from {args.scores}")
+    scores = pd.read_csv(args.scores, index_col=0)
+    logger.info(f"Loaded {scores.shape[0]} reactions x {scores.shape[1]} cells")
+
+    # Load batch labels
+    logger.info(f"Loading batch labels from {args.batches}")
+    batch_df = pd.read_csv(args.batches)
+
+    if "cell_id" in batch_df.columns and "batch" in batch_df.columns:
+        batch_labels = pd.Series(batch_df["batch"].values, index=batch_df["cell_id"])
+    elif batch_df.shape[1] == 2:
+        batch_labels = pd.Series(batch_df.iloc[:, 1].values, index=batch_df.iloc[:, 0])
+    else:
+        logger.error("Batch file must have cell_id and batch columns")
+        return 1
+
+    # Align cells
+    common_cells = scores.columns.intersection(batch_labels.index)
+    logger.info(f"Found {len(common_cells)} cells in common")
+
+    if len(common_cells) == 0:
+        logger.error("No common cells between scores and batch labels")
+        return 1
+
+    scores_aligned = scores[common_cells]
+    batch_aligned = batch_labels[common_cells]
+
+    unique_batches = batch_aligned.unique()
+    logger.info(f"Batches: {list(unique_batches)}")
+
+    # Create output directory
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    # Compute pre-correction metrics
+    logger.info("Computing pre-correction integration metrics...")
+    pre_metrics = compute_integration_metrics(scores_aligned, batch_aligned)
+    logger.info(f"  Batch mixing: {pre_metrics['batch_mixing']:.3f}")
+    logger.info(f"  Batch silhouette: {pre_metrics['batch_silhouette']:.3f}")
+
+    # Run batch correction
+    logger.info(f"Running {args.method} batch correction...")
+
+    if args.method == "harmony":
+        try:
+            corrected = harmony_integrate(scores_aligned, batch_aligned)
+        except ImportError:
+            logger.error("harmonypy not installed. Install with: pip install harmonypy")
+            return 1
+    elif args.method == "combat":
+        corrected = combat_correct(scores_aligned, batch_aligned)
+    else:  # center
+        corrected = center_batches(scores_aligned, batch_aligned)
+
+    logger.info("Batch correction complete")
+
+    # Compute post-correction metrics
+    logger.info("Computing post-correction integration metrics...")
+    post_metrics = compute_integration_metrics(corrected, batch_aligned)
+    logger.info(f"  Batch mixing: {post_metrics['batch_mixing']:.3f}")
+    logger.info(f"  Batch silhouette: {post_metrics['batch_silhouette']:.3f}")
+
+    # Save results
+    corrected.to_csv(args.output / "corrected_scores.csv")
+    logger.info(f"Corrected scores saved to {args.output / 'corrected_scores.csv'}")
+
+    # Save metrics
+    metrics = {
+        "method": args.method,
+        "n_cells": len(common_cells),
+        "n_batches": len(unique_batches),
+        "batches": list(unique_batches),
+        "pre_correction": pre_metrics,
+        "post_correction": post_metrics,
+    }
+    with open(args.output / "batch_correction_metrics.json", "w") as f:
+        json.dump(metrics, f, indent=2)
+    logger.info(f"Metrics saved to {args.output / 'batch_correction_metrics.json'}")
+
+    logger.info("Batch correction complete!")
+    return 0
+
+
+def run_trajectory(args: argparse.Namespace) -> int:
+    """Run trajectory/pseudotime analysis.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+    """
+    import pandas as pd
+
+    from cellmetpro.analysis.trajectory import (
+        compute_metabolic_velocity,
+        compute_pseudotime,
+        trajectory_differential,
+    )
+
+    logger.info("CellMetPro Trajectory Analysis")
+    logger.info("=" * 50)
+
+    # Load reaction scores
+    logger.info(f"Loading reaction scores from {args.scores}")
+    scores = pd.read_csv(args.scores, index_col=0)
+    logger.info(f"Loaded {scores.shape[0]} reactions x {scores.shape[1]} cells")
+
+    # Create output directory
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    # Compute pseudotime
+    logger.info(f"Computing pseudotime (method: {args.method})...")
+    pseudotime = compute_pseudotime(
+        scores,
+        root_cell=args.root_cell,
+        method=args.method,
+    )
+    logger.info(f"Pseudotime computed for {len(pseudotime)} cells")
+
+    # Save pseudotime
+    pt_df = pd.DataFrame({"cell_id": pseudotime.index, "pseudotime": pseudotime.values})
+    pt_df.to_csv(args.output / "pseudotime.csv", index=False)
+    logger.info(f"Pseudotime saved to {args.output / 'pseudotime.csv'}")
+
+    # Compute velocity if requested
+    if args.compute_velocity:
+        logger.info(f"Computing metabolic velocity (window: {args.window_size})...")
+        velocity = compute_metabolic_velocity(
+            scores, pseudotime, window_size=args.window_size
+        )
+        velocity.to_csv(args.output / "metabolic_velocity.csv")
+        logger.info(f"Velocity saved to {args.output / 'metabolic_velocity.csv'}")
+
+        # Find top dynamic reactions
+        dynamic_reactions = velocity.abs().mean(axis=1).nlargest(20)
+        dynamic_df = pd.DataFrame(
+            {
+                "reaction": dynamic_reactions.index,
+                "mean_abs_velocity": dynamic_reactions.values,
+            }
+        )
+        dynamic_df.to_csv(args.output / "dynamic_reactions.csv", index=False)
+        logger.info("Top 20 dynamic reactions saved")
+
+    # Run trajectory differential if requested
+    if args.differential:
+        logger.info("Running trajectory differential analysis...")
+        diff_results = trajectory_differential(scores, pseudotime)
+        diff_results.to_csv(args.output / "trajectory_differential.csv", index=False)
+        logger.info(
+            f"Differential results saved to {args.output / 'trajectory_differential.csv'}"
+        )
+
+        # Report summary
+        increasing = (diff_results["trend"] == "increasing").sum()
+        decreasing = (diff_results["trend"] == "decreasing").sum()
+        logger.info(f"  Increasing reactions: {increasing}")
+        logger.info(f"  Decreasing reactions: {decreasing}")
+
+    # Generate plots if requested
+    if args.plot:
+        logger.info("Generating trajectory plots...")
+
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        # Plot pseudotime distribution
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+        # Histogram of pseudotime
+        axes[0].hist(pseudotime.values, bins=50, edgecolor="black", alpha=0.7)
+        axes[0].set_xlabel("Pseudotime")
+        axes[0].set_ylabel("Number of cells")
+        axes[0].set_title("Pseudotime Distribution")
+
+        # Top reactions along pseudotime
+        if args.differential:
+            # Get top changing reactions
+            top_increasing = diff_results[diff_results["trend"] == "increasing"].head(3)
+            top_decreasing = diff_results[diff_results["trend"] == "decreasing"].head(3)
+
+            order = pseudotime.argsort()
+            pt_sorted = pseudotime.iloc[order].values
+
+            for _, row in top_increasing.iterrows():
+                rxn = row["reaction"]
+                if rxn in scores.index:
+                    y = scores.loc[rxn].iloc[order].values
+                    axes[1].plot(pt_sorted, y, label=f"{rxn} (+)", alpha=0.7)
+
+            for _, row in top_decreasing.iterrows():
+                rxn = row["reaction"]
+                if rxn in scores.index:
+                    y = scores.loc[rxn].iloc[order].values
+                    axes[1].plot(pt_sorted, y, label=f"{rxn} (-)", alpha=0.7, ls="--")
+
+            axes[1].set_xlabel("Pseudotime")
+            axes[1].set_ylabel("Reaction Score")
+            axes[1].set_title("Top Trajectory-Associated Reactions")
+            axes[1].legend(fontsize=8)
+        else:
+            # Just show variance along pseudotime
+            axes[1].text(
+                0.5,
+                0.5,
+                "Run with --differential\nto show trajectory genes",
+                ha="center",
+                va="center",
+                transform=axes[1].transAxes,
+            )
+
+        plt.tight_layout()
+        plt.savefig(args.output / "trajectory_plot.png", dpi=150)
+        plt.close()
+        logger.info(f"Plot saved to {args.output / 'trajectory_plot.png'}")
+
+    logger.info("Trajectory analysis complete!")
+    return 0
+
+
 def show_model_info(args: argparse.Namespace) -> int:
     """Show information about a metabolic model.
 
@@ -1179,6 +1595,12 @@ def main(argv: list[str] | None = None) -> int:
             return run_cluster(args)
         elif args.command == "pathway":
             return run_pathway(args)
+        elif args.command == "report":
+            return run_report(args)
+        elif args.command == "batch-correct":
+            return run_batch_correct(args)
+        elif args.command == "trajectory":
+            return run_trajectory(args)
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
         return 130

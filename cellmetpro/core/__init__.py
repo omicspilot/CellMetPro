@@ -8,6 +8,13 @@ This module contains the fundamental algorithms and utilities for:
 - Caching for optimization results
 """
 
+from .batch_correction import (
+    center_batches,
+    combat_correct,
+    compute_integration_metrics,
+    harmony_integrate,
+    select_hvr,
+)
 from .cache import (
     CompassCache,
     MemoryCache,
@@ -67,4 +74,10 @@ __all__ = [
     "CompassCache",
     "MemoryCache",
     "get_or_compute_max_fluxes",
+    # Batch correction
+    "harmony_integrate",
+    "combat_correct",
+    "center_batches",
+    "compute_integration_metrics",
+    "select_hvr",
 ]

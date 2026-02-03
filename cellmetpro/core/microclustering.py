@@ -327,13 +327,13 @@ def _knn_partitioning(
 ) -> np.ndarray:
     """Partition cells based on KNN graph connectivity."""
     # Simple approach: use connected components with random seeds
-    np.random.seed(random_state)
+    rng = np.random.RandomState(random_state)
 
     n_cells = len(knn_indices)
     labels = np.full(n_cells, -1)
 
     # Select random seed cells
-    seeds = np.random.choice(n_cells, min(n_clusters, n_cells), replace=False)
+    seeds = rng.choice(n_cells, min(n_clusters, n_cells), replace=False)
 
     for cluster_idx, seed in enumerate(seeds):
         labels[seed] = cluster_idx

@@ -362,12 +362,14 @@ class MetabolicClustering:
                 leidenalg.RBConfigurationVertexPartition,
                 weights="weight",
                 resolution_parameter=resolution,
+                seed=42,
             )
         else:  # louvain
             partition = leidenalg.find_partition(
                 g,
                 leidenalg.ModularityVertexPartition,
                 weights="weight",
+                seed=42,
             )
 
         return np.array(partition.membership)
@@ -450,10 +452,29 @@ class MetabolicClustering:
         )
         labels: np.ndarray = clustering.fit_predict(data)
 
-        # Relabel noise points (-1) to a separate cluster for consistency
+        # Assign noise points (-1) to nearest cluster rather than grouping
+        # them together, which would create a spurious metabolic state
         if -1 in labels:
-            max_label = labels.max()
-            labels[labels == -1] = max_label + 1
+            noise_mask = labels == -1
+            n_noise = noise_mask.sum()
+            if labels.max() >= 0:
+                # Find nearest non-noise neighbor for each noise point
+                non_noise_mask = ~noise_mask
+                nn = NearestNeighbors(n_neighbors=1, metric="euclidean")
+                nn.fit(data[non_noise_mask])
+                _, indices = nn.kneighbors(data[noise_mask])
+                # Map back to original labels
+                non_noise_labels = labels[non_noise_mask]
+                labels[noise_mask] = non_noise_labels[indices.flatten()]
+
+                import logging
+
+                logging.getLogger(__name__).info(
+                    f"DBSCAN: assigned {n_noise} noise points to nearest clusters"
+                )
+            else:
+                # All points are noise - assign to cluster 0
+                labels[:] = 0
 
         return np.asarray(labels)
 
@@ -483,10 +504,19 @@ class MetabolicClustering:
         )
         labels: np.ndarray = clustering.fit_predict(data)
 
-        # Relabel noise points (-1) to a separate cluster
+        # Assign noise points (-1) to nearest cluster rather than grouping
+        # them together, which would create a spurious metabolic state
         if -1 in labels:
-            max_label = labels.max()
-            labels[labels == -1] = max_label + 1
+            noise_mask = labels == -1
+            if labels.max() >= 0:
+                non_noise_mask = ~noise_mask
+                nn = NearestNeighbors(n_neighbors=1, metric="euclidean")
+                nn.fit(data[non_noise_mask])
+                _, indices = nn.kneighbors(data[noise_mask])
+                non_noise_labels = labels[non_noise_mask]
+                labels[noise_mask] = non_noise_labels[indices.flatten()]
+            else:
+                labels[:] = 0
 
         return np.asarray(labels)
 

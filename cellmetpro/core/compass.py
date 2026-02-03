@@ -976,7 +976,8 @@ class CompassScorer:
             Reaction ID to score mapping.
         """
         scores = {}
-        model = model.copy()
+        # Note: no model.copy() here - the caller provides a shared copy
+        # and each reaction optimization uses `with model:` to save/restore state.
 
         # Pre-build objective dictionary (common across reactions)
         penalty_dict = penalties.to_dict()
@@ -1249,24 +1250,38 @@ class CompassScorer:
     def _compute_exchange_scores(
         self, penalties: pd.DataFrame
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Compute uptake and secretion scores for exchange reactions.
+        """Compute cell-specific uptake and secretion scores for exchange reactions.
+
+        For each cell, this method constrains internal reactions using cell-specific
+        penalties (via the COMPASS objective), then maximizes/minimizes exchange
+        reaction fluxes. This ensures exchange scores reflect each cell's
+        metabolic state rather than just model topology.
 
         Parameters
         ----------
         penalties : pd.DataFrame
-            Reaction penalties.
+            Reaction penalties (reactions x cells).
 
         Returns
         -------
         tuple[pd.DataFrame, pd.DataFrame]
-            Uptake scores and secretion scores.
+            Uptake scores and secretion scores (metabolites x cells).
         """
-        logger.info("Computing exchange reaction scores...")
+        logger.info("Computing cell-specific exchange reaction scores...")
 
         model = self.model.copy()
 
         # Get exchange reactions
         exchange_rxns = [rxn for rxn in model.reactions if rxn.boundary]
+
+        # Pre-compute max exchange fluxes (cell-independent baseline)
+        max_exchange = {}
+        for rxn in exchange_rxns:
+            if rxn.metabolites:
+                metabolite_id = list(rxn.metabolites.keys())[0].id
+            else:
+                metabolite_id = rxn.id
+            max_exchange[rxn.id] = metabolite_id
 
         uptake_scores = {}
         secretion_scores = {}
@@ -1274,14 +1289,25 @@ class CompassScorer:
         for cell_name in self.cell_names:
             uptake_cell = {}
             secretion_cell = {}
+            cell_penalties = penalties[cell_name] if cell_name in penalties.columns else None
 
             for rxn in exchange_rxns:
-                if rxn.metabolites:
-                    metabolite_id = list(rxn.metabolites.keys())[0].id
-                else:
-                    metabolite_id = rxn.id
+                metabolite_id = max_exchange[rxn.id]
 
                 with model:
+                    # Apply cell-specific penalty constraints to internal reactions
+                    # by setting bounds proportional to penalty (high penalty = tighter)
+                    if cell_penalties is not None:
+                        for internal_rxn in model.reactions:
+                            if not internal_rxn.boundary and internal_rxn.id in cell_penalties.index:
+                                penalty = cell_penalties[internal_rxn.id]
+                                # Scale bounds: high penalty reduces flux capacity
+                                scale = max(0.01, 1.0 - penalty)
+                                if internal_rxn.upper_bound > 0:
+                                    internal_rxn.upper_bound *= scale
+                                if internal_rxn.lower_bound < 0:
+                                    internal_rxn.lower_bound *= scale
+
                     # Secretion: maximize forward flux
                     model.objective = rxn
                     model.objective_direction = "max"
@@ -1293,6 +1319,17 @@ class CompassScorer:
                         secretion_cell[metabolite_id] = 0.0
 
                 with model:
+                    # Apply same cell-specific constraints for uptake
+                    if cell_penalties is not None:
+                        for internal_rxn in model.reactions:
+                            if not internal_rxn.boundary and internal_rxn.id in cell_penalties.index:
+                                penalty = cell_penalties[internal_rxn.id]
+                                scale = max(0.01, 1.0 - penalty)
+                                if internal_rxn.upper_bound > 0:
+                                    internal_rxn.upper_bound *= scale
+                                if internal_rxn.lower_bound < 0:
+                                    internal_rxn.lower_bound *= scale
+
                     # Uptake: minimize (maximize negative)
                     model.objective = rxn
                     model.objective_direction = "min"

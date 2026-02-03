@@ -6,6 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+_has_parquet = (
+    importlib.util.find_spec("pyarrow") is not None
+    or importlib.util.find_spec("fastparquet") is not None
+)
+
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -539,6 +544,7 @@ class TestCache:
         assert loaded["R1"] == 100.0
         assert loaded["R2"] == 50.0
 
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
     def test_save_load_reaction_scores(self, tmp_path):
         """Test saving and loading reaction scores."""
         from cellmetpro.core.cache import CompassCache
@@ -556,6 +562,7 @@ class TestCache:
         assert loaded is not None
         assert loaded.shape == (2, 2)
 
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
     def test_has_sample(self, tmp_path):
         """Test checking for cached samples."""
         from cellmetpro.core.cache import CompassCache
@@ -569,6 +576,7 @@ class TestCache:
 
         assert cache.has_sample("sample1")
 
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
     def test_clear_cache(self, tmp_path):
         """Test clearing cache."""
         from cellmetpro.core.cache import CompassCache

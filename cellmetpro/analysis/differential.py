@@ -505,6 +505,10 @@ class DifferentialAnalysis:
         if N <= 1:
             raise ValueError("Need at least 2 total samples for Dunn's test")
 
+        # Pre-compute tie correction term (shared across all pairs)
+        _, counts = np.unique(all_values, return_counts=True)
+        tie_sum = np.sum(counts**3 - counts)  # Sum of (t_i^3 - t_i) for tied groups
+
         results = []
         for i, g1 in enumerate(groups):
             for g2 in groups[i + 1 :]:
@@ -515,14 +519,14 @@ class DifferentialAnalysis:
                 mean_rank1 = np.mean(group_ranks[g1])
                 mean_rank2 = np.mean(group_ranks[g2])
 
-                # Standard error of difference
-                # Tie correction
-                tie_correction = 1.0
-                _, counts = np.unique(all_values, return_counts=True)
-                if np.any(counts > 1):
-                    tie_correction = 1 - np.sum(counts**3 - counts) / (N**3 - N)
+                # Standard error of difference with tie correction
+                # Dunn (1964) formula: SE = sqrt(((N*(N+1)/12) - A) * (1/ni + 1/nj))
+                # where A = tie_sum / (12*(N-1))
+                variance_term = N * (N + 1) / 12
+                if N > 1 and tie_sum > 0:
+                    variance_term -= tie_sum / (12 * (N - 1))
 
-                se = np.sqrt((N * (N + 1) / 12 - tie_correction) * (1 / n1 + 1 / n2))
+                se = np.sqrt(max(0, variance_term) * (1 / n1 + 1 / n2))
 
                 if se > 0:
                     z = (mean_rank1 - mean_rank2) / se

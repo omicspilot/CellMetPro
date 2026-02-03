@@ -1,9 +1,15 @@
 """Tests for CLI module."""
 
+import importlib.util
 import json
 from pathlib import Path
 
 import pytest
+
+_has_parquet = (
+    importlib.util.find_spec("pyarrow") is not None
+    or importlib.util.find_spec("fastparquet") is not None
+)
 
 
 class TestCLI:
@@ -162,6 +168,7 @@ class TestCLI:
         assert result == 0
         assert output_dir.exists()
 
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
     def test_run_analysis_parquet_output(self, tmp_h5ad, tmp_model_json, tmp_path):
         """Test run command with parquet output format."""
         from cellmetpro.cli import main

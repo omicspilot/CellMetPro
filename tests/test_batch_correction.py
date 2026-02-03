@@ -52,6 +52,7 @@ class TestCenterBatches:
 
     def test_preserves_variance_structure(self):
         """Test that centering preserves relative variance."""
+        np.random.seed(42)
         scores = pd.DataFrame(
             np.random.rand(10, 40),
             index=[f"RXN{i}" for i in range(10)],

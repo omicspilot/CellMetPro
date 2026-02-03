@@ -301,9 +301,29 @@ def compare_flux_distributions(
         # Relative change (avoid division by zero)
         with np.errstate(divide="ignore", invalid="ignore"):
             fc = f2 / f1
-            fc = np.where(np.isfinite(fc), fc, 0.0)
+            fc = np.where(np.isfinite(fc), fc, np.nan)
         result["fold_change"] = fc
-        result["log2_fc"] = np.log2(np.abs(fc) + 1e-10) * np.sign(fc)
+
+        # Log2 fold change: handle flux direction changes properly
+        # For positive fluxes: standard log2(f2/f1)
+        # For sign changes: mark as inf or use signed magnitude
+        log2_fc = np.full_like(fc, np.nan, dtype=float)
+
+        # Both positive
+        both_pos = (f1 > threshold) & (f2 > threshold)
+        log2_fc = np.where(both_pos, np.log2(f2 / f1), log2_fc)
+
+        # Both negative (use absolute values, negate result)
+        both_neg = (f1 < -threshold) & (f2 < -threshold)
+        log2_fc = np.where(both_neg, np.log2(np.abs(f2) / np.abs(f1)), log2_fc)
+
+        # Sign change cases: use signed difference indicator
+        sign_change = (f1 > threshold) & (f2 < -threshold) | (f1 < -threshold) & (
+            f2 > threshold
+        )
+        log2_fc = np.where(sign_change, np.inf * np.sign(f2 - f1), log2_fc)
+
+        result["log2_fc"] = log2_fc
 
     # Filter by threshold
     significant = (np.abs(f1) > threshold) | (np.abs(f2) > threshold)

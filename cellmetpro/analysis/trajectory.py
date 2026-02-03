@@ -116,8 +116,12 @@ def _compute_dpt(
     data: np.ndarray,
     root_idx: int,
     n_neighbors: int = 15,
+    n_dcs: int = 10,
 ) -> np.ndarray:
-    """Compute diffusion pseudotime.
+    """Compute diffusion pseudotime using eigendecomposition.
+
+    This implementation follows the approach from Haghverdi et al. (2016),
+    computing diffusion pseudotime via diffusion components.
 
     Parameters
     ----------
@@ -127,6 +131,8 @@ def _compute_dpt(
         Index of root cell.
     n_neighbors : int
         Number of neighbors.
+    n_dcs : int
+        Number of diffusion components to use.
 
     Returns
     -------
@@ -144,35 +150,61 @@ def _compute_dpt(
     sigma = distances[:, -1]  # Distance to k-th neighbor
     sigma[sigma == 0] = 1e-10
 
-    # Build transition matrix using Gaussian kernel
+    # Build symmetric affinity matrix using Gaussian kernel
     W = np.zeros((n_cells, n_cells))
     for i in range(n_cells):
         for j_idx, j in enumerate(indices[i]):
             d = distances[i, j_idx]
-            # Use geometric mean of sigmas
+            # Use geometric mean of sigmas (adaptive bandwidth)
             s = np.sqrt(sigma[i] * sigma[j])
             W[i, j] = np.exp(-(d**2) / (2 * s**2))
             W[j, i] = W[i, j]
 
-    # Row-normalize to get transition probabilities
+    # Normalize to get transition matrix (row-stochastic)
     row_sums = W.sum(axis=1, keepdims=True)
     row_sums[row_sums == 0] = 1
     T = W / row_sums
 
-    # Compute diffusion distance from root
-    # Use powers of transition matrix
-    T_power = T.copy()
-    for _ in range(3):  # Take a few diffusion steps
-        T_power = T_power @ T
+    # Compute diffusion components via eigendecomposition
+    # For symmetric normalization, use: T_sym = D^{-1/2} W D^{-1/2}
+    d_sqrt_inv = 1.0 / np.sqrt(row_sums.flatten() + 1e-10)
+    T_sym = d_sqrt_inv[:, None] * W * d_sqrt_inv[None, :]
 
-    # Pseudotime = diffusion distance from root
-    pseudotime = 1 - T_power[root_idx, :]
+    try:
+        # Compute top eigenvectors
+        from scipy.sparse.linalg import eigsh
+
+        n_eigs = min(n_dcs + 1, n_cells - 2)
+        eigenvalues, eigenvectors = eigsh(T_sym, k=n_eigs, which="LM")
+
+        # Sort by eigenvalue (descending)
+        idx = np.argsort(eigenvalues)[::-1]
+        eigenvalues = eigenvalues[idx]
+        eigenvectors = eigenvectors[:, idx]
+
+        # Skip first eigenvector (trivial, all ones)
+        # Diffusion components are scaled eigenvectors
+        diffusion_components = eigenvectors[:, 1 : n_dcs + 1]
+
+        # DPT = Euclidean distance in diffusion component space from root
+        root_dc = diffusion_components[root_idx]
+        pseudotime = np.sqrt(((diffusion_components - root_dc) ** 2).sum(axis=1))
+
+    except Exception:
+        # Fallback to power iteration method
+        T_power = T.copy()
+        for _ in range(5):  # More steps for better approximation
+            T_power = T_power @ T
+        pseudotime = 1 - T_power[root_idx, :]
 
     return np.asarray(pseudotime)
 
 
 def _compute_principal_curve_pseudotime(data: np.ndarray) -> np.ndarray:
     """Compute pseudotime using principal curve projection.
+
+    This uses an iterative projection approach that considers multiple
+    PCs for better trajectory estimation.
 
     Parameters
     ----------
@@ -184,15 +216,34 @@ def _compute_principal_curve_pseudotime(data: np.ndarray) -> np.ndarray:
     np.ndarray
         Pseudotime values.
     """
-    # Simple implementation: project onto first PC
+    n_cells = data.shape[0]
+
+    # Start with PC1 projection
     pc1 = data[:, 0]
-
-    # Use cumulative distance along sorted PC1
     order = np.argsort(pc1)
-    pseudotime = np.zeros(len(pc1))
-    pseudotime[order] = np.arange(len(pc1))
 
-    return pseudotime / len(pc1)
+    # Compute cumulative arc-length along the trajectory
+    # Use multiple PCs for distance calculation
+    n_pcs_use = min(3, data.shape[1])  # Use first 3 PCs
+    data_subset = data[:, :n_pcs_use]
+
+    # Order cells by PC1 and compute cumulative distance
+    ordered_data = data_subset[order]
+    distances = np.zeros(n_cells)
+    for i in range(1, n_cells):
+        distances[i] = distances[i - 1] + np.linalg.norm(
+            ordered_data[i] - ordered_data[i - 1]
+        )
+
+    # Normalize to [0, 1]
+    if distances[-1] > 0:
+        distances = distances / distances[-1]
+
+    # Map back to original cell order
+    pseudotime = np.zeros(n_cells)
+    pseudotime[order] = distances
+
+    return pseudotime
 
 
 def _compute_correlation_pseudotime(data: np.ndarray, root_idx: int) -> np.ndarray:

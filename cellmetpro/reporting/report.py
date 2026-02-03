@@ -365,13 +365,17 @@ def _df_to_html(df: pd.DataFrame, max_rows: int = 20) -> str:
     str
         HTML table string.
     """
+    # Make a copy to avoid modifying the original
+    df = df.copy()
+
     if len(df) > max_rows:
         df = df.head(max_rows)
 
     # Format numeric columns
     for col in df.select_dtypes(include=[np.number]).columns:
         if df[col].dtype == float:
-            if df[col].abs().max() < 0.01 or df[col].abs().max() > 1000:
+            col_max = df[col].abs().max()
+            if pd.notna(col_max) and (col_max < 0.01 or col_max > 1000):
                 df[col] = df[col].apply(lambda x: f"{x:.2e}" if pd.notna(x) else "")
             else:
                 df[col] = df[col].apply(lambda x: f"{x:.4f}" if pd.notna(x) else "")
@@ -659,11 +663,12 @@ class ReportGenerator:
 
         if "scores" in self.data:
             scores = self.data["scores"]
+            mean_score = np.nanmean(scores.values) if scores.size > 0 else 0.0
             html += f"""
     <h2>Data Summary</h2>
     <p>Reactions: {scores.shape[0]}</p>
     <p>Cells: {scores.shape[1]}</p>
-    <p>Mean score: {scores.values.mean():.4f}</p>
+    <p>Mean score: {mean_score:.4f}</p>
 """
 
         if "config" in self.data:

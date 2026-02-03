@@ -95,6 +95,18 @@ def harmony_integrate(
             f"number of cells ({scores.shape[1]})"
         )
 
+    # Validate we have multiple batches
+    n_batches = len(np.unique(batch_labels))
+    if n_batches < 2:
+        import warnings
+
+        warnings.warn(
+            f"Only {n_batches} batch(es) found. Returning original data unchanged.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return scores.copy()
+
     # Transpose: cells x reactions for PCA
     X = scores.T.values
 
@@ -444,13 +456,14 @@ def select_hvr(
     mean = scores.mean(axis=1)
     var = scores.var(axis=1)
 
-    # Normalized dispersion
-    mean_nonzero = mean.copy()
-    mean_nonzero[mean_nonzero == 0] = 1e-10
-    disp = var / mean_nonzero
+    # Normalized dispersion - use absolute mean to handle negative values
+    # This treats reactions with large magnitude means (+ or -) similarly
+    mean_abs = np.abs(mean)
+    mean_abs[mean_abs == 0] = 1e-10
+    disp = var / mean_abs
 
-    # Log transform for binning
-    mean_log = np.log1p(mean)
+    # Log transform for binning (use absolute mean for binning)
+    mean_log = np.log1p(mean_abs)
 
     # Bin genes by mean expression
     n_bins = 20

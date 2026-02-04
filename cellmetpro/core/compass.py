@@ -453,7 +453,10 @@ class CompassScorer:
         if self.config.precompute_gpr and self._parsed_gprs:
             # Use pre-parsed GPRs (faster for repeated evaluations)
             reaction_expression = self._evaluate_gprs_vectorized(
-                reactions_with_gpr, expr_array, and_func, or_func  # type: ignore[arg-type]
+                reactions_with_gpr,
+                expr_array,
+                and_func,
+                or_func,  # type: ignore[arg-type]
             )
         else:
             # Fallback to standard evaluation
@@ -634,7 +637,10 @@ class CompassScorer:
 
         # Parse and evaluate the GPR rule
         return self._evaluate_gpr_recursive(
-            gpr_rule.upper(), expression, and_func, or_func  # type: ignore[arg-type]
+            gpr_rule.upper(),
+            expression,
+            and_func,
+            or_func,  # type: ignore[arg-type]
         )
 
     def _evaluate_gpr_recursive(
@@ -1289,7 +1295,9 @@ class CompassScorer:
         for cell_name in self.cell_names:
             uptake_cell = {}
             secretion_cell = {}
-            cell_penalties = penalties[cell_name] if cell_name in penalties.columns else None
+            cell_penalties = (
+                penalties[cell_name] if cell_name in penalties.columns else None
+            )
 
             for rxn in exchange_rxns:
                 metabolite_id = max_exchange[rxn.id]
@@ -1299,7 +1307,10 @@ class CompassScorer:
                     # by setting bounds proportional to penalty (high penalty = tighter)
                     if cell_penalties is not None:
                         for internal_rxn in model.reactions:
-                            if not internal_rxn.boundary and internal_rxn.id in cell_penalties.index:
+                            if (
+                                not internal_rxn.boundary
+                                and internal_rxn.id in cell_penalties.index
+                            ):
                                 penalty = cell_penalties[internal_rxn.id]
                                 # Scale bounds: high penalty reduces flux capacity
                                 scale = max(0.01, 1.0 - penalty)
@@ -1322,7 +1333,10 @@ class CompassScorer:
                     # Apply same cell-specific constraints for uptake
                     if cell_penalties is not None:
                         for internal_rxn in model.reactions:
-                            if not internal_rxn.boundary and internal_rxn.id in cell_penalties.index:
+                            if (
+                                not internal_rxn.boundary
+                                and internal_rxn.id in cell_penalties.index
+                            ):
                                 penalty = cell_penalties[internal_rxn.id]
                                 scale = max(0.01, 1.0 - penalty)
                                 if internal_rxn.upper_bound > 0:

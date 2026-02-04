@@ -418,8 +418,7 @@ def load_seurat_rds(
                 for red_name in list(reductions):
                     try:
                         red_data = ro.r(
-                            f"Embeddings({seurat_obj.r_repr()}, "
-                            f'reduction="{red_name}")'
+                            f'Embeddings({seurat_obj.r_repr()}, reduction="{red_name}")'
                         )
                         red_array = np.array(red_data)
                         adata.obsm[f"X_{red_name}"] = red_array

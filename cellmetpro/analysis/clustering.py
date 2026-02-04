@@ -586,11 +586,11 @@ class MetabolicClustering:
 
         if self.embedding is not None:
             for i in range(self.embedding.shape[1]):
-                data[f"dim_{i+1}"] = self.embedding[:, i]
+                data[f"dim_{i + 1}"] = self.embedding[:, i]
 
         if self.pca_components is not None:
             for i in range(min(3, self.pca_components.shape[1])):
-                data[f"PC{i+1}"] = self.pca_components[:, i]
+                data[f"PC{i + 1}"] = self.pca_components[:, i]
 
         return pd.DataFrame(data)
 
@@ -619,7 +619,7 @@ class MetabolicClustering:
             embedding_df = pd.DataFrame(
                 self.embedding,
                 index=self.cell_ids,
-                columns=[f"metabolic_{i+1}" for i in range(self.embedding.shape[1])],
+                columns=[f"metabolic_{i + 1}" for i in range(self.embedding.shape[1])],
             )
             common_cells = adata.obs_names.intersection(embedding_df.index)
             adata.obsm["X_metabolic"] = embedding_df.loc[common_cells].values

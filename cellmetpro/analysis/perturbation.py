@@ -196,13 +196,13 @@ def multi_knockout(
             try:
                 solution = model_copy.optimize()
                 if solution.status == "optimal":
-                    results[f"KO_{i+1}_{gene_id}"] = solution.fluxes
+                    results[f"KO_{i + 1}_{gene_id}"] = solution.fluxes
                 else:
-                    results[f"KO_{i+1}_{gene_id}"] = pd.Series(
+                    results[f"KO_{i + 1}_{gene_id}"] = pd.Series(
                         0.0, index=[r.id for r in model.reactions]
                     )
             except Exception:
-                results[f"KO_{i+1}_{gene_id}"] = pd.Series(
+                results[f"KO_{i + 1}_{gene_id}"] = pd.Series(
                     0.0, index=[r.id for r in model.reactions]
                 )
 

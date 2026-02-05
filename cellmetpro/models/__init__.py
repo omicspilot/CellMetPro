@@ -117,9 +117,11 @@ def load_gem(organism: str) -> cobra.Model:
             f"and place it in: {GEMS_DIR}"
         )
 
+    supported = list(MODEL_URLS.keys())
+    formats = ", ".join(SUPPORTED_FORMATS)
     raise ValueError(
-        f"Unknown organism '{organism}'. Supported organisms: {list(MODEL_URLS.keys())}\n"
-        f"Or provide a path to a model file ({', '.join(SUPPORTED_FORMATS)})"
+        f"Unknown organism '{organism}'. Supported organisms: {supported}\n"
+        f"Or provide a path to a model file ({formats})"
     )
 
 
@@ -245,7 +247,8 @@ def _make_irreversible(model: cobra.Model) -> cobra.Model:
         )
 
         # Add reverse stoichiometry
-        reverse_rxn.add_metabolites({met: -coef for met, coef in rxn.metabolites.items()})
+        reverse_stoich = {met: -coef for met, coef in rxn.metabolites.items()}
+        reverse_rxn.add_metabolites(reverse_stoich)
 
         # Copy gene reaction rule
         reverse_rxn.gene_reaction_rule = rxn.gene_reaction_rule

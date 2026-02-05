@@ -7,6 +7,12 @@ models to infer metabolic activity at single-cell resolution.
 This implementation uses COBRApy for constraint-based modeling, providing
 an open-source alternative to the original Gurobi-based implementation.
 
+Optimized for large datasets with:
+- Vectorized GPR evaluation with caching
+- Pre-computed max fluxes (cell-independent)
+- Batch processing for memory efficiency
+- Improved parallel execution
+
 References:
     Wagner et al. (2021) "Metabolic modeling of single Th17 cells reveals
     regulators of autoimmunity" Cell.
@@ -16,12 +22,20 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 from scipy.sparse import issparse
 
 if TYPE_CHECKING:
@@ -59,6 +73,16 @@ class CompassConfig:
         Number of parallel processes for computation.
     solver : str
         LP solver to use ('glpk', 'cplex', 'gurobi').
+    batch_size : int
+        Number of cells to process per batch (for memory efficiency).
+        Set to 0 for no batching.
+    cache_max_fluxes : bool
+        Whether to pre-compute and cache max fluxes (recommended for
+        large datasets as max flux is cell-independent).
+    precompute_gpr : bool
+        Whether to pre-parse GPR rules for faster evaluation.
+    show_progress : bool
+        Whether to show progress bars for long-running operations.
     """
 
     beta: float = BETA
@@ -69,6 +93,170 @@ class CompassConfig:
     n_neighbors: int = 30
     n_processes: int = 1
     solver: str = "glpk"
+    batch_size: int = 100
+    cache_max_fluxes: bool = True
+    precompute_gpr: bool = True
+    show_progress: bool = True
+
+
+class ParsedGPR:
+    """Pre-parsed GPR rule for efficient vectorized evaluation.
+
+    This class parses a GPR rule once and stores it in a form that
+    allows fast vectorized evaluation across many cells.
+    """
+
+    __slots__ = ("rule", "genes", "tree", "_gene_indices")
+
+    def __init__(self, rule: str) -> None:
+        """Parse a GPR rule string.
+
+        Parameters
+        ----------
+        rule : str
+            GPR rule like "GENE1 and (GENE2 or GENE3)".
+        """
+        self.rule = rule.strip().upper() if rule else ""
+        self.genes: list[str] = []
+        self.tree: tuple | str | None = None
+        self._gene_indices: dict[str, int] = {}
+
+        if self.rule:
+            self._parse()
+
+    def _parse(self) -> None:
+        """Parse the rule into a tree structure."""
+        # Extract all gene names by removing keywords and splitting
+        # Replace AND/OR with spaces, remove parentheses, then split
+        cleaned = re.sub(r"\b(AND|OR)\b", " ", self.rule, flags=re.IGNORECASE)
+        cleaned = cleaned.replace("(", " ").replace(")", " ")
+
+        # Extract unique gene names (non-empty tokens)
+        tokens = cleaned.split()
+        self.genes = [t for t in tokens if t and t.upper() not in ("AND", "OR")]
+        self._gene_indices = {g: i for i, g in enumerate(self.genes)}
+
+        # Build tree
+        self.tree = self._parse_rule(self.rule)
+
+    def _parse_rule(self, rule: str) -> tuple | str:
+        """Recursively parse rule into tree."""
+        rule = rule.strip()
+
+        # Remove matching outer parentheses
+        while rule.startswith("(") and rule.endswith(")"):
+            depth = 0
+            matching = True
+            for i, char in enumerate(rule[:-1]):
+                if char == "(":
+                    depth += 1
+                elif char == ")":
+                    depth -= 1
+                if depth == 0 and i < len(rule) - 2:
+                    matching = False
+                    break
+            if matching:
+                rule = rule[1:-1].strip()
+            else:
+                break
+
+        # Split at OR (lowest precedence)
+        or_parts = self._split_at_operator(rule, " OR ")
+        if len(or_parts) > 1:
+            return ("OR", tuple(self._parse_rule(p) for p in or_parts))
+
+        # Split at AND
+        and_parts = self._split_at_operator(rule, " AND ")
+        if len(and_parts) > 1:
+            return ("AND", tuple(self._parse_rule(p) for p in and_parts))
+
+        # Base case: single gene
+        return rule.strip()
+
+    def _split_at_operator(self, rule: str, operator: str) -> list[str]:
+        """Split at operator respecting parentheses."""
+        parts = []
+        current = ""
+        depth = 0
+        i = 0
+        while i < len(rule):
+            if rule[i] == "(":
+                depth += 1
+                current += rule[i]
+            elif rule[i] == ")":
+                depth -= 1
+                current += rule[i]
+            elif depth == 0 and rule[i:].upper().startswith(operator):
+                if current.strip():
+                    parts.append(current.strip())
+                current = ""
+                i += len(operator) - 1
+            else:
+                current += rule[i]
+            i += 1
+        if current.strip():
+            parts.append(current.strip())
+        return parts if len(parts) > 1 else [rule]
+
+    def evaluate(
+        self,
+        expression_matrix: np.ndarray,
+        gene_to_idx: dict[str, int],
+        and_func: Callable,
+        or_func: Callable,
+    ) -> np.ndarray:
+        """Evaluate GPR rule using vectorized operations.
+
+        Parameters
+        ----------
+        expression_matrix : np.ndarray
+            Expression matrix (genes x cells).
+        gene_to_idx : dict
+            Mapping from gene name to row index in expression_matrix.
+        and_func : callable
+            Function for AND operations.
+        or_func : callable
+            Function for OR operations.
+
+        Returns
+        -------
+        np.ndarray
+            Expression values for each cell.
+        """
+        if not self.rule or self.tree is None:
+            return np.zeros(expression_matrix.shape[1])
+
+        return self._evaluate_tree(
+            self.tree, expression_matrix, gene_to_idx, and_func, or_func
+        )
+
+    def _evaluate_tree(
+        self,
+        tree: tuple | str,
+        expr: np.ndarray,
+        gene_to_idx: dict[str, int],
+        and_func: Callable,
+        or_func: Callable,
+    ) -> np.ndarray:
+        """Recursively evaluate the parsed tree."""
+        if isinstance(tree, str):
+            # Base case: gene name
+            if tree in gene_to_idx:
+                return np.asarray(expr[gene_to_idx[tree]])
+            return np.zeros(expr.shape[1])
+
+        op, children = tree
+        child_values = np.array(
+            [
+                self._evaluate_tree(c, expr, gene_to_idx, and_func, or_func)
+                for c in children
+            ]
+        )
+
+        if op == "OR":
+            return np.asarray(or_func(child_values, axis=0))
+        else:  # AND
+            return np.asarray(and_func(child_values, axis=0))
 
 
 @dataclass
@@ -151,6 +339,9 @@ class CompassScorer:
         self._expression_upper = self.gene_expression.copy()
         self._expression_upper.index = self._expression_upper.index.str.upper()
 
+        # Track missing genes during GPR evaluation
+        self._missing_genes: set[str] = set()
+
         # Build gene-reaction mapping
         self._build_gpr_mapping()
 
@@ -168,9 +359,7 @@ class CompassScorer:
                     data = expr.X.toarray().T
                 else:
                     data = expr.X.T
-                return pd.DataFrame(
-                    data, index=expr.var_names, columns=expr.obs_names
-                )
+                return pd.DataFrame(data, index=expr.var_names, columns=expr.obs_names)
         except ImportError:
             pass
 
@@ -185,11 +374,24 @@ class CompassScorer:
         """Build mapping from reactions to gene expression evaluation functions."""
         self._reaction_genes: dict[str, list[str]] = {}
         self._reaction_gpr: dict[str, str] = {}
+        self._parsed_gprs: dict[str, ParsedGPR] = {}
 
         for rxn in self.model.reactions:
             if rxn.genes:
                 self._reaction_genes[rxn.id] = [g.id for g in rxn.genes]
                 self._reaction_gpr[rxn.id] = rxn.gene_reaction_rule
+
+                # Pre-parse GPR for faster evaluation
+                if self.config.precompute_gpr:
+                    self._parsed_gprs[rxn.id] = ParsedGPR(rxn.gene_reaction_rule)
+
+        # Build gene name to index mapping for vectorized evaluation
+        self._gene_to_idx: dict[str, int] = {
+            gene.upper(): i for i, gene in enumerate(self._expression_upper.index)
+        }
+
+        # Pre-cache max fluxes holder
+        self._max_flux_cache: dict[str, float] = {}
 
     @property
     def reaction_penalties(self) -> pd.DataFrame:
@@ -213,6 +415,11 @@ class CompassScorer:
         rules using the expression values. Higher penalties indicate
         reactions that are less likely to be active.
 
+        This method is optimized for large datasets using:
+        - Pre-parsed GPR rules for faster evaluation
+        - Vectorized numpy operations
+        - Batch processing for memory efficiency
+
         Returns
         -------
         pd.DataFrame
@@ -229,27 +436,57 @@ class CompassScorer:
             logger.warning("No reactions with GPR rules found in model")
             return pd.DataFrame()
 
-        # Compute expression for each reaction
-        reaction_expression = {}
+        n_reactions = len(reactions_with_gpr)
+        n_cells = len(self.cell_names)
+        logger.info(f"Processing {n_reactions} reactions across {n_cells} cells")
 
-        for rxn in reactions_with_gpr:
-            expr_values = self._evaluate_gpr(
-                rxn.gene_reaction_rule, self._expression_upper
+        # Define aggregation functions
+        and_funcs = {"min": np.min, "mean": np.mean, "median": np.median}
+        or_funcs = {"max": np.max, "sum": np.sum, "mean": np.mean}
+        and_func = and_funcs[self.config.and_function]
+        or_func = or_funcs[self.config.or_function]
+
+        # Convert expression to numpy array for faster access
+        expr_array = self._expression_upper.values
+
+        # Compute expression for each reaction using optimized evaluation
+        if self.config.precompute_gpr and self._parsed_gprs:
+            # Use pre-parsed GPRs (faster for repeated evaluations)
+            reaction_expression = self._evaluate_gprs_vectorized(
+                reactions_with_gpr,
+                expr_array,
+                and_func,
+                or_func,  # type: ignore[arg-type]
             )
-            reaction_expression[rxn.id] = expr_values
+        else:
+            # Fallback to standard evaluation
+            reaction_expression = {}
+            for rxn in reactions_with_gpr:
+                expr_values = self._evaluate_gpr(
+                    rxn.gene_reaction_rule, self._expression_upper
+                )
+                reaction_expression[rxn.id] = expr_values
 
-        # Create DataFrame
-        reaction_expr_df = pd.DataFrame(reaction_expression).T
-        reaction_expr_df.columns = self.cell_names
+        # Create DataFrame efficiently
+        reaction_ids = [rxn.id for rxn in reactions_with_gpr]
+        reaction_expr_df = pd.DataFrame(reaction_expression, index=self.cell_names).T
+        reaction_expr_df.index = reaction_ids
 
-        # Convert expression to penalties (higher expression = lower penalty)
-        # Use log transform and inversion
-        penalties = self._expression_to_penalty(reaction_expr_df)
+        # Convert expression to penalties using optimized numpy operations
+        penalties = self._expression_to_penalty_optimized(reaction_expr_df)
 
         logger.info(
             f"Computed penalties for {len(penalties)} reactions across "
             f"{len(self.cell_names)} cells"
         )
+
+        # Warn about missing genes
+        if self._missing_genes:
+            logger.warning(
+                f"{len(self._missing_genes)} genes from model GPR rules not found "
+                f"in expression data. These genes were treated as zero expression. "
+                f"Examples: {list(self._missing_genes)[:5]}"
+            )
 
         # Apply penalty smoothing if lambda > 0
         if self.config.lambda_penalty > 0:
@@ -257,6 +494,121 @@ class CompassScorer:
 
         self._reaction_penalties = penalties
         return penalties
+
+    def _evaluate_gprs_vectorized(
+        self,
+        reactions: list,
+        expr_array: np.ndarray,
+        and_func: Callable,
+        or_func: Callable,
+    ) -> dict[str, np.ndarray]:
+        """Evaluate all GPR rules using vectorized operations.
+
+        Parameters
+        ----------
+        reactions : list
+            List of reactions with GPR rules.
+        expr_array : np.ndarray
+            Expression matrix (genes x cells) as numpy array.
+        and_func : callable
+            Aggregation function for AND operations.
+        or_func : callable
+            Aggregation function for OR operations.
+
+        Returns
+        -------
+        dict
+            Mapping from reaction ID to expression values array.
+        """
+        result: dict[str, np.ndarray] = {}
+
+        if self.config.show_progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                transient=True,
+            ) as progress:
+                task = progress.add_task(
+                    "Evaluating GPR rules...", total=len(reactions)
+                )
+                for rxn in reactions:
+                    self._evaluate_single_gpr(
+                        rxn, expr_array, and_func, or_func, result
+                    )
+                    progress.update(task, advance=1)
+        else:
+            for rxn in reactions:
+                self._evaluate_single_gpr(rxn, expr_array, and_func, or_func, result)
+
+        return result
+
+    def _evaluate_single_gpr(
+        self,
+        rxn,
+        expr_array: np.ndarray,
+        and_func: Callable,
+        or_func: Callable,
+        result: dict[str, np.ndarray],
+    ) -> None:
+        """Evaluate GPR for a single reaction and store in result dict."""
+        if rxn.id in self._parsed_gprs:
+            parsed = self._parsed_gprs[rxn.id]
+            values = parsed.evaluate(expr_array, self._gene_to_idx, and_func, or_func)
+            result[rxn.id] = values
+
+            # Track missing genes
+            for gene in parsed.genes:
+                if gene not in self._gene_to_idx:
+                    self._missing_genes.add(gene)
+        else:
+            # Fallback for non-precomputed
+            result[rxn.id] = self._evaluate_gpr(
+                rxn.gene_reaction_rule, self._expression_upper
+            )
+
+    def _expression_to_penalty_optimized(
+        self, expression: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Convert expression to penalties using optimized numpy operations.
+
+        Parameters
+        ----------
+        expression : pd.DataFrame
+            Reaction expression values (reactions x cells).
+
+        Returns
+        -------
+        pd.DataFrame
+            Penalty scores (reactions x cells).
+        """
+        # Work with numpy arrays for speed
+        expr_values = expression.values.astype(np.float64)
+
+        # Handle inf values by replacing with large finite value
+        expr_values = np.nan_to_num(expr_values, nan=0.0, posinf=1e10, neginf=0.0)
+
+        # Add epsilon and log transform
+        expr_safe = expr_values + PENALTY_EPSILON
+        log_expr = np.log1p(expr_safe)
+
+        # Normalize per reaction (row-wise)
+        max_vals = log_expr.max(axis=1, keepdims=True)
+        # Avoid division by zero
+        max_vals = np.where(max_vals == 0, 1.0, max_vals)
+
+        normalized = log_expr / max_vals
+
+        # Invert: high expression = low penalty
+        penalties = 1 - normalized
+
+        # Ensure valid range
+        penalties = np.clip(penalties, 0.0, 1.0)
+
+        return pd.DataFrame(
+            penalties, index=expression.index, columns=expression.columns
+        )
 
     def _evaluate_gpr(self, gpr_rule: str, expression: pd.DataFrame) -> np.ndarray:
         """Evaluate a GPR rule using expression data.
@@ -285,7 +637,10 @@ class CompassScorer:
 
         # Parse and evaluate the GPR rule
         return self._evaluate_gpr_recursive(
-            gpr_rule.upper(), expression, and_func, or_func
+            gpr_rule.upper(),
+            expression,
+            and_func,
+            or_func,  # type: ignore[arg-type]
         )
 
     def _evaluate_gpr_recursive(
@@ -323,7 +678,7 @@ class CompassScorer:
                 self._evaluate_gpr_recursive(part, expression, and_func, or_func)
                 for part in or_parts
             ]
-            return or_func(np.array(values), axis=0)
+            return np.asarray(or_func(np.array(values), axis=0))
 
         # Find top-level AND operators
         and_parts = self._split_at_operator(gpr_rule, " AND ")
@@ -332,14 +687,15 @@ class CompassScorer:
                 self._evaluate_gpr_recursive(part, expression, and_func, or_func)
                 for part in and_parts
             ]
-            return and_func(np.array(values), axis=0)
+            return np.asarray(and_func(np.array(values), axis=0))
 
         # Base case: single gene
         gene = gpr_rule.strip()
         if gene in expression.index:
-            return expression.loc[gene].values.astype(float)
+            return np.asarray(expression.loc[gene].values.astype(float))
         else:
-            # Gene not found - return zeros
+            # Gene not found - track and return zeros
+            self._missing_genes.add(gene)
             return np.zeros(expression.shape[1])
 
     def _split_at_operator(self, rule: str, operator: str) -> list[str]:
@@ -443,9 +799,9 @@ class CompassScorer:
             neighbor_penalties = penalties_array[neighbor_indices].mean(axis=0)
 
             # Blend with lambda
-            smoothed[i] = (
-                1 - self.config.lambda_penalty
-            ) * penalties_array[i] + self.config.lambda_penalty * neighbor_penalties
+            smoothed[i] = (1 - self.config.lambda_penalty) * penalties_array[
+                i
+            ] + self.config.lambda_penalty * neighbor_penalties
 
         smoothed_df = pd.DataFrame(
             smoothed.T, index=penalties.index, columns=penalties.columns
@@ -453,9 +809,7 @@ class CompassScorer:
 
         return smoothed_df
 
-    def optimize_reactions(
-        self, penalties: pd.DataFrame | None = None
-    ) -> pd.DataFrame:
+    def optimize_reactions(self, penalties: pd.DataFrame | None = None) -> pd.DataFrame:
         """Run COMPASS optimization for each reaction.
 
         For each reaction and each cell:
@@ -463,6 +817,11 @@ class CompassScorer:
         2. Constrain the reaction to BETA * max_flux
         3. Minimize total weighted penalty across all reactions
         4. Record the minimum penalty as the reaction's score
+
+        Optimizations:
+        - Pre-computes max fluxes once (cell-independent)
+        - Processes cells in batches for memory efficiency
+        - Uses parallel processing when configured
 
         Parameters
         ----------
@@ -481,8 +840,6 @@ class CompassScorer:
 
         logger.info("Running COMPASS optimization...")
 
-        import cobra
-
         # Prepare model
         model = self.model.copy()
 
@@ -495,28 +852,186 @@ class CompassScorer:
 
         logger.info(f"Optimizing {len(internal_reactions)} reactions")
 
+        # Pre-compute max fluxes (cell-independent optimization)
+        if self.config.cache_max_fluxes and not self._max_flux_cache:
+            logger.info("Pre-computing max fluxes for all reactions...")
+            self._precompute_max_fluxes(model, internal_reactions)
+            logger.info(f"Cached max fluxes for {len(self._max_flux_cache)} reactions")
+
         # Run optimization for each cell
         scores = {}
+        n_cells = len(self.cell_names)
+        batch_size = self.config.batch_size if self.config.batch_size > 0 else n_cells
 
         if self.config.n_processes > 1:
-            # Parallel processing
+            # Parallel processing with batching
             scores = self._optimize_parallel(model, penalties, internal_reactions)
         else:
-            # Sequential processing
-            for cell_idx, cell_name in enumerate(self.cell_names):
-                if cell_idx % 10 == 0:
-                    logger.info(f"Processing cell {cell_idx + 1}/{len(self.cell_names)}")
+            # Sequential processing with batching
+            if self.config.show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task("Optimizing cells...", total=n_cells)
+                    for batch_start in range(0, n_cells, batch_size):
+                        batch_end = min(batch_start + batch_size, n_cells)
+                        batch_cells = self.cell_names[batch_start:batch_end]
 
-                cell_penalties = penalties[cell_name]
-                cell_scores = self._optimize_single_cell(
-                    model, cell_penalties, internal_reactions
-                )
-                scores[cell_name] = cell_scores
+                        for cell_name in batch_cells:
+                            cell_penalties = penalties[cell_name]
+                            cell_scores = self._optimize_single_cell_fast(
+                                model, cell_penalties, internal_reactions
+                            )
+                            scores[cell_name] = cell_scores
+                            progress.update(task, advance=1)
+            else:
+                for batch_start in range(0, n_cells, batch_size):
+                    batch_end = min(batch_start + batch_size, n_cells)
+                    batch_cells = self.cell_names[batch_start:batch_end]
+
+                    logger.info(
+                        f"Processing cells {batch_start + 1}-{batch_end}/{n_cells}"
+                    )
+
+                    for cell_name in batch_cells:
+                        cell_penalties = penalties[cell_name]
+                        cell_scores = self._optimize_single_cell_fast(
+                            model, cell_penalties, internal_reactions
+                        )
+                        scores[cell_name] = cell_scores
 
         scores_df = pd.DataFrame(scores)
         logger.info("COMPASS optimization complete")
 
         return scores_df
+
+    def _precompute_max_fluxes(
+        self, model: cobra.Model, reaction_ids: list[str]
+    ) -> None:
+        """Pre-compute maximum flux for all reactions.
+
+        Max flux is cell-independent, so we only need to compute it once.
+        This is a major optimization for large datasets.
+
+        Parameters
+        ----------
+        model : cobra.Model
+            Metabolic model.
+        reaction_ids : list[str]
+            Reaction IDs to compute max flux for.
+        """
+        model = model.copy()
+
+        def compute_max_flux(rxn_id: str) -> None:
+            try:
+                rxn = model.reactions.get_by_id(rxn_id)
+                model.objective = rxn
+                model.objective_direction = "max"
+
+                with model:
+                    solution = model.optimize()
+                    if solution.status == "optimal":
+                        self._max_flux_cache[rxn_id] = abs(solution.objective_value)
+                    else:
+                        self._max_flux_cache[rxn_id] = 0.0
+            except Exception:
+                self._max_flux_cache[rxn_id] = 0.0
+
+        if self.config.show_progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                transient=True,
+            ) as progress:
+                task = progress.add_task(
+                    "Computing max fluxes...", total=len(reaction_ids)
+                )
+                for rxn_id in reaction_ids:
+                    compute_max_flux(rxn_id)
+                    progress.update(task, advance=1)
+        else:
+            for rxn_id in reaction_ids:
+                compute_max_flux(rxn_id)
+
+    def _optimize_single_cell_fast(
+        self,
+        model: cobra.Model,
+        penalties: pd.Series,
+        reaction_ids: list[str],
+    ) -> dict[str, float]:
+        """Optimized single cell optimization using cached max fluxes.
+
+        Parameters
+        ----------
+        model : cobra.Model
+            Metabolic model.
+        penalties : pd.Series
+            Penalty values for this cell.
+        reaction_ids : list[str]
+            Reactions to optimize.
+
+        Returns
+        -------
+        dict[str, float]
+            Reaction ID to score mapping.
+        """
+        scores = {}
+        # Note: no model.copy() here - the caller provides a shared copy
+        # and each reaction optimization uses `with model:` to save/restore state.
+
+        # Pre-build objective dictionary (common across reactions)
+        penalty_dict = penalties.to_dict()
+        base_objective = {}
+        for r in model.reactions:
+            if r.id in penalty_dict:
+                penalty = penalty_dict[r.id]
+                base_objective[r.forward_variable] = penalty
+                base_objective[r.reverse_variable] = penalty
+
+        if not base_objective:
+            # No matching penalties, return default
+            return {rxn_id: penalties.get(rxn_id, 1.0) for rxn_id in reaction_ids}
+
+        for rxn_id in reaction_ids:
+            try:
+                # Get cached max flux
+                max_flux = self._max_flux_cache.get(rxn_id, 0.0)
+
+                if max_flux < 1e-9:
+                    scores[rxn_id] = penalties.get(rxn_id, 1.0)
+                    continue
+
+                rxn = model.reactions.get_by_id(rxn_id)
+
+                # Constrain and minimize penalty
+                with model:
+                    constraint_value = self.config.beta * max_flux
+                    if rxn.upper_bound > 0:
+                        rxn.lower_bound = max(rxn.lower_bound, constraint_value)
+                    else:
+                        rxn.upper_bound = min(rxn.upper_bound, -constraint_value)
+
+                    model.objective = base_objective
+                    model.objective_direction = "min"
+
+                    solution = model.optimize()
+
+                    if solution.status == "optimal":
+                        scores[rxn_id] = solution.objective_value
+                    else:
+                        scores[rxn_id] = penalties.get(rxn_id, 1.0)
+
+            except Exception as e:
+                logger.debug(f"Error optimizing {rxn_id}: {e}")
+                scores[rxn_id] = penalties.get(rxn_id, 1.0)
+
+        return scores
 
     def _optimize_single_cell(
         self,
@@ -540,7 +1055,6 @@ class CompassScorer:
         dict[str, float]
             Reaction ID to score mapping.
         """
-        import cobra
 
         scores = {}
         model = model.copy()
@@ -590,6 +1104,11 @@ class CompassScorer:
                             objective_dict[r.forward_variable] = penalty
                             objective_dict[r.reverse_variable] = penalty
 
+                    # Skip if no penalties match model reactions
+                    if not objective_dict:
+                        scores[rxn_id] = penalties.get(rxn_id, 1.0)
+                        continue
+
                     model.objective = objective_dict
                     model.objective_direction = "min"
 
@@ -612,34 +1131,82 @@ class CompassScorer:
         penalties: pd.DataFrame,
         reaction_ids: list[str],
     ) -> dict[str, dict[str, float]]:
-        """Run optimization in parallel across cells."""
-        import pickle
+        """Run optimization in parallel across cells.
+
+        Uses batching and cached max fluxes for efficiency.
+        """
+        import cobra as cobra_module
 
         # Serialize model for passing to workers
-        model_str = cobra.io.to_json(model)
+        model_str = cobra_module.io.to_json(model)
+
+        # Pass cached max fluxes to workers
+        max_flux_cache = dict(self._max_flux_cache)
 
         scores = {}
+        n_cells = len(self.cell_names)
+        batch_size = max(1, n_cells // (self.config.n_processes * 4))
+
+        # Create batches of cells
+        cell_batches = []
+        for i in range(0, n_cells, batch_size):
+            batch_cells = self.cell_names[i : i + batch_size]
+            batch_penalties = {cell: penalties[cell].to_dict() for cell in batch_cells}
+            cell_batches.append((batch_cells, batch_penalties))
+
+        logger.info(
+            f"Processing {n_cells} cells in {len(cell_batches)} batches "
+            f"using {self.config.n_processes} processes"
+        )
 
         with ProcessPoolExecutor(max_workers=self.config.n_processes) as executor:
             futures = {}
-            for cell_name in self.cell_names:
-                cell_penalties = penalties[cell_name]
+            for batch_cells, batch_penalties in cell_batches:
                 future = executor.submit(
-                    _optimize_cell_worker,
+                    _optimize_batch_worker,
                     model_str,
-                    cell_penalties.to_dict(),
+                    batch_penalties,
                     reaction_ids,
                     self.config.beta,
+                    max_flux_cache,
                 )
-                futures[future] = cell_name
+                futures[future] = batch_cells
 
-            for future in as_completed(futures):
-                cell_name = futures[future]
-                try:
-                    scores[cell_name] = future.result()
-                except Exception as e:
-                    logger.error(f"Error processing {cell_name}: {e}")
-                    scores[cell_name] = {rxn: 1.0 for rxn in reaction_ids}
+            if self.config.show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task(
+                        "Optimizing cells (parallel)...", total=n_cells
+                    )
+                    for future in as_completed(futures):
+                        batch_cells = futures[future]
+                        try:
+                            batch_scores = future.result()
+                            scores.update(batch_scores)
+                            progress.update(task, advance=len(batch_cells))
+                        except Exception as e:
+                            logger.error(f"Error processing batch: {e}")
+                            for cell in batch_cells:
+                                scores[cell] = {rxn: 1.0 for rxn in reaction_ids}
+                            progress.update(task, advance=len(batch_cells))
+            else:
+                completed = 0
+                for future in as_completed(futures):
+                    batch_cells = futures[future]
+                    completed += len(batch_cells)
+                    try:
+                        batch_scores = future.result()
+                        scores.update(batch_scores)
+                        logger.info(f"Completed {completed}/{n_cells} cells")
+                    except Exception as e:
+                        logger.error(f"Error processing batch: {e}")
+                        for cell in batch_cells:
+                            scores[cell] = {rxn: 1.0 for rxn in reaction_ids}
 
         return scores
 
@@ -689,40 +1256,69 @@ class CompassScorer:
     def _compute_exchange_scores(
         self, penalties: pd.DataFrame
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Compute uptake and secretion scores for exchange reactions.
+        """Compute cell-specific uptake and secretion scores for exchange reactions.
+
+        For each cell, this method constrains internal reactions using cell-specific
+        penalties (via the COMPASS objective), then maximizes/minimizes exchange
+        reaction fluxes. This ensures exchange scores reflect each cell's
+        metabolic state rather than just model topology.
 
         Parameters
         ----------
         penalties : pd.DataFrame
-            Reaction penalties.
+            Reaction penalties (reactions x cells).
 
         Returns
         -------
         tuple[pd.DataFrame, pd.DataFrame]
-            Uptake scores and secretion scores.
+            Uptake scores and secretion scores (metabolites x cells).
         """
-        logger.info("Computing exchange reaction scores...")
-
-        import cobra
+        logger.info("Computing cell-specific exchange reaction scores...")
 
         model = self.model.copy()
 
         # Get exchange reactions
         exchange_rxns = [rxn for rxn in model.reactions if rxn.boundary]
 
+        # Pre-compute max exchange fluxes (cell-independent baseline)
+        max_exchange = {}
+        for rxn in exchange_rxns:
+            if rxn.metabolites:
+                metabolite_id = list(rxn.metabolites.keys())[0].id
+            else:
+                metabolite_id = rxn.id
+            max_exchange[rxn.id] = metabolite_id
+
         uptake_scores = {}
         secretion_scores = {}
 
         for cell_name in self.cell_names:
-            cell_penalties = penalties[cell_name] if cell_name in penalties.columns else pd.Series()
-
             uptake_cell = {}
             secretion_cell = {}
+            cell_penalties = (
+                penalties[cell_name] if cell_name in penalties.columns else None
+            )
 
             for rxn in exchange_rxns:
-                metabolite_id = list(rxn.metabolites.keys())[0].id if rxn.metabolites else rxn.id
+                metabolite_id = max_exchange[rxn.id]
 
                 with model:
+                    # Apply cell-specific penalty constraints to internal reactions
+                    # by setting bounds proportional to penalty (high penalty = tighter)
+                    if cell_penalties is not None:
+                        for internal_rxn in model.reactions:
+                            if (
+                                not internal_rxn.boundary
+                                and internal_rxn.id in cell_penalties.index
+                            ):
+                                penalty = cell_penalties[internal_rxn.id]
+                                # Scale bounds: high penalty reduces flux capacity
+                                scale = max(0.01, 1.0 - penalty)
+                                if internal_rxn.upper_bound > 0:
+                                    internal_rxn.upper_bound *= scale
+                                if internal_rxn.lower_bound < 0:
+                                    internal_rxn.lower_bound *= scale
+
                     # Secretion: maximize forward flux
                     model.objective = rxn
                     model.objective_direction = "max"
@@ -734,6 +1330,20 @@ class CompassScorer:
                         secretion_cell[metabolite_id] = 0.0
 
                 with model:
+                    # Apply same cell-specific constraints for uptake
+                    if cell_penalties is not None:
+                        for internal_rxn in model.reactions:
+                            if (
+                                not internal_rxn.boundary
+                                and internal_rxn.id in cell_penalties.index
+                            ):
+                                penalty = cell_penalties[internal_rxn.id]
+                                scale = max(0.01, 1.0 - penalty)
+                                if internal_rxn.upper_bound > 0:
+                                    internal_rxn.upper_bound *= scale
+                                if internal_rxn.lower_bound < 0:
+                                    internal_rxn.lower_bound *= scale
+
                     # Uptake: minimize (maximize negative)
                     model.objective = rxn
                     model.objective_direction = "min"
@@ -758,6 +1368,7 @@ def _optimize_cell_worker(
     penalties_dict: dict[str, float],
     reaction_ids: list[str],
     beta: float,
+    max_flux_cache: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """Worker function for parallel cell optimization.
 
@@ -768,26 +1379,41 @@ def _optimize_cell_worker(
     model = cobra.io.from_json(model_json)
     penalties = pd.Series(penalties_dict)
 
+    # Pre-build objective dictionary
+    base_objective = {}
+    for r in model.reactions:
+        if r.id in penalties.index:
+            penalty = penalties[r.id]
+            base_objective[r.forward_variable] = penalty
+            base_objective[r.reverse_variable] = penalty
+
+    if not base_objective:
+        return {rxn_id: penalties.get(rxn_id, 1.0) for rxn_id in reaction_ids}
+
     scores = {}
 
     for rxn_id in reaction_ids:
         try:
-            rxn = model.reactions.get_by_id(rxn_id)
+            # Use cached max flux if available
+            if max_flux_cache and rxn_id in max_flux_cache:
+                max_flux = max_flux_cache[rxn_id]
+            else:
+                rxn = model.reactions.get_by_id(rxn_id)
+                model.objective = rxn
+                model.objective_direction = "max"
 
-            # Maximize reaction flux
-            model.objective = rxn
-            model.objective_direction = "max"
-
-            with model:
-                solution = model.optimize()
-                if solution.status == "optimal":
-                    max_flux = abs(solution.objective_value)
-                else:
-                    max_flux = 0
+                with model:
+                    solution = model.optimize()
+                    if solution.status == "optimal":
+                        max_flux = abs(solution.objective_value)
+                    else:
+                        max_flux = 0
 
             if max_flux < 1e-9:
                 scores[rxn_id] = penalties.get(rxn_id, 1.0)
                 continue
+
+            rxn = model.reactions.get_by_id(rxn_id)
 
             # Constrain and minimize penalty
             with model:
@@ -797,14 +1423,7 @@ def _optimize_cell_worker(
                 else:
                     rxn.upper_bound = min(rxn.upper_bound, -constraint_value)
 
-                objective_dict = {}
-                for r in model.reactions:
-                    if r.id in penalties.index:
-                        penalty = penalties[r.id]
-                        objective_dict[r.forward_variable] = penalty
-                        objective_dict[r.reverse_variable] = penalty
-
-                model.objective = objective_dict
+                model.objective = base_objective
                 model.objective_direction = "min"
 
                 solution = model.optimize()
@@ -818,6 +1437,44 @@ def _optimize_cell_worker(
             scores[rxn_id] = penalties.get(rxn_id, 1.0)
 
     return scores
+
+
+def _optimize_batch_worker(
+    model_json: str,
+    batch_penalties: dict[str, dict[str, float]],
+    reaction_ids: list[str],
+    beta: float,
+    max_flux_cache: dict[str, float],
+) -> dict[str, dict[str, float]]:
+    """Worker function for batch cell optimization.
+
+    Processes multiple cells in a single worker for better efficiency.
+
+    Parameters
+    ----------
+    model_json : str
+        JSON-serialized model.
+    batch_penalties : dict
+        Mapping from cell name to penalties dict.
+    reaction_ids : list
+        Reactions to optimize.
+    beta : float
+        COMPASS beta parameter.
+    max_flux_cache : dict
+        Pre-computed max fluxes.
+
+    Returns
+    -------
+    dict
+        Mapping from cell name to scores dict.
+    """
+    results = {}
+    for cell_name, penalties_dict in batch_penalties.items():
+        results[cell_name] = _optimize_cell_worker(
+            model_json, penalties_dict, reaction_ids, beta, max_flux_cache
+        )
+
+    return results
 
 
 def run_compass(

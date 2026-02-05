@@ -38,6 +38,7 @@ dependencies = [
     "statsmodels>=0.14",
     "umap-learn>=0.5",
     "cobra>=0.26",
+    "rich-argparse>=1.4",
 ]
 
 [project.optional-dependencies]
@@ -51,8 +52,11 @@ dev = [
 dashboard = [
     "streamlit>=1.28",
 ]
+seurat = [
+    "rpy2>=3.5",  # For loading Seurat objects from R
+]
 all = [
-    "cellmetpro[dev,dashboard]",
+    "cellmetpro[dev,dashboard,seurat]",
 ]
 
 [project.scripts]
@@ -78,7 +82,11 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # Line too long (handled by Black)
+    "N806",   # Variable in function should be lowercase (scientific notation uses X, A, B, etc.)
+    "E741",   # Ambiguous variable name (l, O, I - common in math)
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -93,3 +101,25 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["cellmetpro"]
+branch = true
+omit = [
+    "cellmetpro/visualization/dashboard.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"

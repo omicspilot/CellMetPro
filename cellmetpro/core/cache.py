@@ -15,7 +15,6 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -123,7 +122,8 @@ class CompassCache:
         if path.exists():
             with open(path, "rb") as f:
                 logger.debug(f"Loading max fluxes from cache: {path}")
-                return pickle.load(f)
+                data: dict[str, float] = pickle.load(f)
+                return data
         return None
 
     def save_reaction_scores(
@@ -227,8 +227,9 @@ class CompassCache:
         """
         path = self._get_path(key, suffix=".json")
         if path.exists():
-            with open(path, "r") as f:
-                return json.load(f)
+            with open(path) as f:
+                data: dict = json.load(f)
+                return data
         return None
 
     def has_sample(self, sample_id: str) -> bool:
@@ -337,7 +338,6 @@ def get_or_compute_max_fluxes(
     dict[str, float]
         Maximum flux for each reaction.
     """
-    import cobra
 
     # Try loading from cache
     if cache is not None:

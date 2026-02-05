@@ -153,6 +153,8 @@ def microcluster(
 
     # Perform clustering
     if config.method == "leiden":
+        # Ensure knn_distances is available for leiden
+        assert knn_distances is not None, "knn_distances required for leiden clustering"
         labels = _leiden_clustering(
             pca_coords,
             knn_indices,
@@ -161,13 +163,9 @@ def microcluster(
             config.random_state,
         )
     elif config.method == "kmeans":
-        labels = _kmeans_clustering(
-            pca_coords, target_n_clusters, config.random_state
-        )
+        labels = _kmeans_clustering(pca_coords, target_n_clusters, config.random_state)
     elif config.method == "knn":
-        labels = _knn_partitioning(
-            knn_indices, target_n_clusters, config.random_state
-        )
+        labels = _knn_partitioning(knn_indices, target_n_clusters, config.random_state)
     else:
         raise ValueError(f"Unknown clustering method: {config.method}")
 
@@ -269,8 +267,8 @@ def _leiden_clustering(
 ) -> np.ndarray:
     """Perform Leiden clustering on KNN graph."""
     try:
-        import leidenalg
         import igraph as ig
+        import leidenalg
     except ImportError:
         logger.warning("leidenalg not installed, falling back to k-means")
         return _kmeans_clustering(coords, len(coords) // 100, random_state)
@@ -318,10 +316,8 @@ def _kmeans_clustering(
 
     n_clusters = max(1, min(n_clusters, len(coords)))
 
-    kmeans = KMeans(
-        n_clusters=n_clusters, random_state=random_state, n_init=10
-    )
-    labels = kmeans.fit_predict(coords)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
+    labels: np.ndarray = kmeans.fit_predict(coords)
 
     return labels
 
@@ -331,13 +327,13 @@ def _knn_partitioning(
 ) -> np.ndarray:
     """Partition cells based on KNN graph connectivity."""
     # Simple approach: use connected components with random seeds
-    np.random.seed(random_state)
+    rng = np.random.RandomState(random_state)
 
     n_cells = len(knn_indices)
     labels = np.full(n_cells, -1)
 
     # Select random seed cells
-    seeds = np.random.choice(n_cells, min(n_clusters, n_cells), replace=False)
+    seeds = rng.choice(n_cells, min(n_clusters, n_cells), replace=False)
 
     for cluster_idx, seed in enumerate(seeds):
         labels[seed] = cluster_idx
@@ -372,7 +368,6 @@ def _readjust_clusters(
     Splits large clusters and merges small ones.
     """
     labels = labels.copy()
-    n_cells = len(labels)
 
     # Get cluster sizes
     unique_labels = np.unique(labels)
@@ -407,35 +402,41 @@ def _readjust_clusters(
 
     # Merge small clusters
     unique_labels = np.unique(labels)
-    cluster_sizes = {l: np.sum(labels == l) for l in unique_labels}
+    cluster_size_dict: dict[int, int] = {
+        int(lbl): int(np.sum(labels == lbl)) for lbl in unique_labels
+    }
 
     for label in unique_labels:
-        if cluster_sizes[label] < min_cluster_size:
+        if cluster_size_dict[int(label)] < min_cluster_size:
             # Find nearest large cluster
             cluster_mask = labels == label
             cluster_center = coords[cluster_mask].mean(axis=0)
 
-            best_target = None
-            best_dist = np.inf
+            best_target: int | None = None
+            best_dist: float = float("inf")
 
             for other_label in unique_labels:
-                if other_label != label and cluster_sizes[other_label] >= min_cluster_size:
+                is_different = other_label != label
+                is_large_enough = (
+                    cluster_size_dict[int(other_label)] >= min_cluster_size
+                )
+                if is_different and is_large_enough:
                     other_mask = labels == other_label
                     other_center = coords[other_mask].mean(axis=0)
-                    dist = np.linalg.norm(cluster_center - other_center)
+                    dist = float(np.linalg.norm(cluster_center - other_center))
                     if dist < best_dist:
                         best_dist = dist
-                        best_target = other_label
+                        best_target = int(other_label)
 
             if best_target is not None:
                 labels[cluster_mask] = best_target
-                cluster_sizes[best_target] += cluster_sizes[label]
-                cluster_sizes[label] = 0
+                cluster_size_dict[best_target] += cluster_size_dict[int(label)]
+                cluster_size_dict[int(label)] = 0
 
     # Relabel to consecutive integers
     unique_labels = np.unique(labels)
-    label_map = {old: new for new, old in enumerate(unique_labels)}
-    labels = np.array([label_map[l] for l in labels])
+    label_map = {int(old): new for new, old in enumerate(unique_labels)}
+    labels = np.array([label_map[int(lbl)] for lbl in labels])
 
     return labels
 

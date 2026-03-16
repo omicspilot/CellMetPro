@@ -40,7 +40,7 @@ def create_parser() -> argparse.ArgumentParser:
         prog="cellmetpro",
         description="""
 ╔═══════════════════════════════════════════════════════════════════════╗
-║                        🧬 CellMetPro 🧬                               ║
+║                         CellMetPro:                                   ║
 ║         Cellular Metabolic Profiler for scRNA-seq data                ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 
@@ -48,7 +48,7 @@ Analyze metabolic activity at single-cell resolution using the COMPASS
 algorithm. Score reactions, identify metabolic heterogeneity, and
 discover metabolic programs in your scRNA-seq data.
 """,
-        formatter_class=RichHelpFormatter,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   cellmetpro run expression.h5ad -m human -o results/

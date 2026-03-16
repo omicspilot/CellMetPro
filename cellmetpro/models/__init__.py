@@ -32,7 +32,7 @@ MODEL_URLS = {
 }
 
 
-def _download_model(url: str, dest: Path) -> None:
+def _download_model(url: str, dest: Path, auto_confirm: bool = False) -> None:
     """Download a model file from a URL with progress display.
 
     Parameters
@@ -43,6 +43,14 @@ def _download_model(url: str, dest: Path) -> None:
         Destination file path.
     """
     import urllib.request
+
+    if not auto_confirm:
+        print(f"\nModel '{dest.stem}' not found locally.")
+        print(f"  Source: {url}")
+        print(f"  Destination: {dest}")
+        answer = input("Download now? [y/N] ").strip().lower()
+        if answer != "y":
+            raise RuntimeError("Download cancelled by user.")
 
     print(f"Downloading model: {dest.name}")
     print(f"  Source: {url}")
@@ -107,7 +115,7 @@ def load_mouse_gem() -> cobra.Model:
     return load_gem("mouse")
 
 
-def load_gem(organism: str) -> cobra.Model:
+def load_gem(organism: str, auto_confirm: bool = False) -> cobra.Model:
     """Load a GEM model by organism name or file path.
 
     Parameters
@@ -157,7 +165,7 @@ def load_gem(organism: str) -> cobra.Model:
         suffix = Path(url).suffix
         cached_path = cache_dir / f"{organism_lower}{suffix}"
         logger.info(f"Downloading {organism} model from {url} ...")
-        _download_model(url, cached_path)
+        _download_model(url, cached_path, auto_confirm=auto_confirm)
         return load_model_from_file(cached_path)
 
     supported = list(MODEL_URLS.keys())

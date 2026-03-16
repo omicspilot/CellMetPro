@@ -74,6 +74,12 @@ Examples:
         action="store_true",
         help="Enable verbose output",
     )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Automatically answer yes to all prompts (e.g. model downloads)",
+    )
 
     subparsers = parser.add_subparsers(
         dest="command", metavar="", help="Available commands"
@@ -606,7 +612,7 @@ def run_analysis(args: argparse.Namespace) -> int:
 
     # Load metabolic model
     logger.info(f"Loading metabolic model: {args.model}")
-    model = load_gem(args.model)
+    model = load_gem(args.model, auto_confirm=getattr(args, "yes", False))
     logger.info(
         f"Model: {model.id} ({len(model.reactions)} reactions, "
         f"{len(model.metabolites)} metabolites, {len(model.genes)} genes)"
@@ -1061,7 +1067,7 @@ def run_pathway(args: argparse.Namespace) -> int:
 
     # Load metabolic model
     logger.info(f"Loading metabolic model: {args.model}")
-    model = load_gem(args.model)
+    model = load_gem(args.model, auto_confirm=getattr(args, "yes", False))
 
     # Get background reactions
     if args.background:
@@ -1523,7 +1529,7 @@ def show_model_info(args: argparse.Namespace) -> int:
     from cellmetpro.models import get_subsystem_reactions, load_gem
 
     try:
-        model = load_gem(args.model)
+        model = load_gem(args.model, auto_confirm=getattr(args, "yes", False))
     except (FileNotFoundError, ValueError) as e:
         logger.error(str(e))
         return 1

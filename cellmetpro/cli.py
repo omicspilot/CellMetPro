@@ -11,7 +11,7 @@ import logging
 import sys
 from pathlib import Path
 
-from rich_argparse import RichHelpFormatter
+from rich_argparse import RichHelpFormatter, RawDescriptionRichHelpFormatter
 
 # Configure logging
 logging.basicConfig(
@@ -48,7 +48,7 @@ Analyze metabolic activity at single-cell resolution using the COMPASS
 algorithm. Score reactions, identify metabolic heterogeneity, and
 discover metabolic programs in your scRNA-seq data.
 """,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=RawDescriptionRichHelpFormatter,
         epilog="""
 Examples:
   cellmetpro run expression.h5ad -m human -o results/
@@ -75,7 +75,7 @@ Examples:
         help="Enable verbose output",
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers = parser.add_subparsers(dest="command", metavar="", help="Available commands")
 
     # Run command
     run_parser = subparsers.add_parser(

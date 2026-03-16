@@ -1574,7 +1574,10 @@ def main(argv: list[str] | None = None) -> int:
     int
         Exit code.
     """
+    import argcomplete
+
     parser = create_parser()
+    argcomplete.autocomplete(parser)
     args = parser.parse_args(argv)
 
     if args.verbose:

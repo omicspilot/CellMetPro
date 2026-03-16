@@ -11,7 +11,7 @@ import logging
 import sys
 from pathlib import Path
 
-from rich_argparse import RichHelpFormatter, RawDescriptionRichHelpFormatter
+from rich_argparse import RawDescriptionRichHelpFormatter, RichHelpFormatter
 
 # Configure logging
 logging.basicConfig(
@@ -75,7 +75,9 @@ Examples:
         help="Enable verbose output",
     )
 
-    subparsers = parser.add_subparsers(dest="command", metavar="", help="Available commands")
+    subparsers = parser.add_subparsers(
+        dest="command", metavar="", help="Available commands"
+    )
 
     # Run command
     run_parser = subparsers.add_parser(

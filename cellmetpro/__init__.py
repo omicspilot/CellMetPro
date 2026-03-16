@@ -5,7 +5,12 @@ from single-cell RNA-seq data using Flux Balance Analysis (FBA) and
 Genome-Scale Metabolic Models (GEMs).
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("cellmetpro")
+except PackageNotFoundError:
+    __version__ = "unknown"
 __author__ = "Oumar Ndiaye"
 
 __all__ = ["core", "analysis", "visualization", "data", "reporting"]

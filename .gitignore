@@ -115,10 +115,10 @@ dmypy.json
 *.loom
 
 # Large data directories
-data/raw/
-data/processed/
+data/
 results/
 output/
+**/cache/
 
 # Temporary files
 *.tmp

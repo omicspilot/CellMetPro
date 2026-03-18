@@ -22,6 +22,19 @@ logging.basicConfig(
 logger = logging.getLogger("cellmetpro")
 
 
+def _open_file(path: str) -> None:
+    """Open a file with the OS default application."""
+    import os
+    import subprocess
+
+    if sys.platform == "darwin":
+        subprocess.run(["open", path], check=False)
+    elif sys.platform.startswith("linux"):
+        subprocess.run(["xdg-open", path], check=False)
+    elif sys.platform == "win32":
+        os.startfile(path)
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser for the CLI.
 
@@ -886,6 +899,7 @@ def run_differential(args: argparse.Namespace) -> int:
             logger.info(
                 f"Interactive volcano plot saved to {args.output / 'volcano_plot.html'}"
             )
+            _open_file(str(args.output / "volcano_plot.html"))
         else:
             import matplotlib
 
@@ -899,6 +913,7 @@ def run_differential(args: argparse.Namespace) -> int:
                 save=str(args.output / "volcano_plot.png"),
             )
             logger.info(f"Volcano plot saved to {args.output / 'volcano_plot.png'}")
+            _open_file(str(args.output / "volcano_plot.png"))
 
     logger.info("Differential analysis complete!")
     return 0
@@ -1012,6 +1027,7 @@ def run_cluster(args: argparse.Namespace) -> int:
             logger.info(
                 f"Interactive plot saved to {args.output / 'embedding_plot.html'}"
             )
+            _open_file(str(args.output / "embedding_plot.html"))
         else:
             import matplotlib
 
@@ -1027,6 +1043,7 @@ def run_cluster(args: argparse.Namespace) -> int:
                 save=str(args.output / "embedding_plot.png"),
             )
             logger.info(f"Plot saved to {args.output / 'embedding_plot.png'}")
+            _open_file(str(args.output / "embedding_plot.png"))
 
     logger.info("Clustering analysis complete!")
     return 0
@@ -1209,6 +1226,7 @@ def run_pathway(args: argparse.Namespace) -> int:
             logger.info(
                 f"Interactive plot saved to {args.output / 'enrichment_plot.html'}"
             )
+            _open_file(str(args.output / "enrichment_plot.html"))
         else:
             import matplotlib
 
@@ -1222,6 +1240,7 @@ def run_pathway(args: argparse.Namespace) -> int:
                 save=str(args.output / "enrichment_plot.png"),
             )
             logger.info(f"Plot saved to {args.output / 'enrichment_plot.png'}")
+            _open_file(str(args.output / "enrichment_plot.png"))
 
     logger.info("Pathway enrichment analysis complete!")
     return 0
@@ -1524,6 +1543,7 @@ def run_trajectory(args: argparse.Namespace) -> int:
         plt.savefig(args.output / "trajectory_plot.png", dpi=150)
         plt.close()
         logger.info(f"Plot saved to {args.output / 'trajectory_plot.png'}")
+        _open_file(str(args.output / "trajectory_plot.png"))
 
     logger.info("Trajectory analysis complete!")
     return 0

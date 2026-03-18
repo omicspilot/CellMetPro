@@ -7,7 +7,7 @@ name = "cellmetpro"
 version = "0.1.0"
 description = "Cellular Metabolic Profiler - Analyze and visualize metabolic profiles from scRNA-seq data"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Oumar Ndiaye", email = "n.oumar@outlook.it"}
 ]
@@ -15,7 +15,6 @@ requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

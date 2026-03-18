@@ -15,6 +15,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from cellmetpro import __version__
+
 # HTML template for the report
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -506,7 +508,7 @@ class ReportGenerator:
         # Prepare template variables
         template_vars: dict[str, Any] = {
             "generation_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "version": "0.1.0",
+            "version": __version__,
             "n_cells": 0,
             "n_reactions": 0,
             "n_genes": 0,

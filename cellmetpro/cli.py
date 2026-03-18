@@ -11,7 +11,7 @@ import logging
 import sys
 from pathlib import Path
 
-from rich_argparse import RichHelpFormatter
+from rich_argparse import RawDescriptionRichHelpFormatter, RichHelpFormatter
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +20,19 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("cellmetpro")
+
+
+def _open_file(path: str) -> None:
+    """Open a file with the OS default application."""
+    import os
+    import subprocess
+
+    if sys.platform == "darwin":
+        subprocess.run(["open", path], check=False)
+    elif sys.platform.startswith("linux"):
+        subprocess.run(["xdg-open", path], check=False)
+    elif sys.platform == "win32":
+        os.startfile(path)
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -40,7 +53,7 @@ def create_parser() -> argparse.ArgumentParser:
         prog="cellmetpro",
         description="""
 ╔═══════════════════════════════════════════════════════════════════════╗
-║                        🧬 CellMetPro 🧬                               ║
+║                         CellMetPro:                                   ║
 ║         Cellular Metabolic Profiler for scRNA-seq data                ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 
@@ -48,7 +61,7 @@ Analyze metabolic activity at single-cell resolution using the COMPASS
 algorithm. Score reactions, identify metabolic heterogeneity, and
 discover metabolic programs in your scRNA-seq data.
 """,
-        formatter_class=RichHelpFormatter,
+        formatter_class=RawDescriptionRichHelpFormatter,
         epilog="""
 Examples:
   cellmetpro run expression.h5ad -m human -o results/
@@ -64,18 +77,26 @@ Examples:
 """,
     )
     parser.add_argument(
+        "-v",
         "--version",
         action="store_true",
         help="Show version and exit",
     )
     parser.add_argument(
-        "-v",
         "--verbose",
         action="store_true",
         help="Enable verbose output",
     )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Automatically answer yes to all prompts (e.g. model downloads)",
+    )
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers = parser.add_subparsers(
+        dest="command", metavar="", help="Available commands"
+    )
 
     # Run command
     run_parser = subparsers.add_parser(
@@ -254,8 +275,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("differential_results"),
-        help="Output directory (default: differential_results/)",
+        default=Path("results/differential"),
+        help="Output directory (default: results/differential/)",
     )
     diff_parser.add_argument(
         "--group1",
@@ -312,8 +333,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("clustering_results"),
-        help="Output directory (default: clustering_results/)",
+        default=Path("results/clustering"),
+        help="Output directory (default: results/clustering/)",
     )
     cluster_parser.add_argument(
         "--n-clusters",
@@ -374,8 +395,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("pathway_results"),
-        help="Output directory (default: pathway_results/)",
+        default=Path("results/pathway"),
+        help="Output directory (default: results/pathway/)",
     )
     pathway_parser.add_argument(
         "--model",
@@ -443,6 +464,7 @@ Examples:
         "-o",
         "--output",
         type=Path,
+        default=Path("results/report.html"),
         help="Output HTML file (default: results/report.html)",
     )
     report_parser.add_argument(
@@ -478,8 +500,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("batch_corrected"),
-        help="Output directory (default: batch_corrected/)",
+        default=Path("results/batch_corrected"),
+        help="Output directory (default: results/batch_corrected/)",
     )
     batch_parser.add_argument(
         "--method",
@@ -509,8 +531,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("trajectory_results"),
-        help="Output directory (default: trajectory_results/)",
+        default=Path("results/trajectory"),
+        help="Output directory (default: results/trajectory/)",
     )
     traj_parser.add_argument(
         "--root-cell",
@@ -604,7 +626,7 @@ def run_analysis(args: argparse.Namespace) -> int:
 
     # Load metabolic model
     logger.info(f"Loading metabolic model: {args.model}")
-    model = load_gem(args.model)
+    model = load_gem(args.model, auto_confirm=getattr(args, "yes", False))
     logger.info(
         f"Model: {model.id} ({len(model.reactions)} reactions, "
         f"{len(model.metabolites)} metabolites, {len(model.genes)} genes)"
@@ -792,16 +814,24 @@ def run_differential(args: argparse.Namespace) -> int:
 
     # Load group labels
     logger.info(f"Loading group labels from {args.groups}")
-    groups_df = pd.read_csv(args.groups)
+    sep = "\t" if str(args.groups).endswith((".tsv", ".txt")) else ","
+    groups_df = pd.read_csv(args.groups, sep=sep)
 
     # Handle different group file formats
-    if "cell_id" in groups_df.columns and "group" in groups_df.columns:
-        groups = pd.Series(groups_df["group"].values, index=groups_df["cell_id"])
+    group_col = "group" if "group" in groups_df.columns else groups_df.columns[1]
+    if "cell_id" in groups_df.columns:
+        groups = pd.Series(groups_df[group_col].values, index=groups_df["cell_id"])
     elif groups_df.shape[1] == 2:
         groups = pd.Series(groups_df.iloc[:, 1].values, index=groups_df.iloc[:, 0])
     else:
         # Assume first column is index
         groups = pd.Series(groups_df.iloc[:, 0].values, index=groups_df.index)
+
+    # Normalize barcodes: strip 10x GEM well suffix (e.g. -1) if scores use bare barcodes
+    if len(scores.columns.intersection(groups.index)) == 0:
+        stripped = groups.index.str.replace(r"-\d+$", "", regex=True)
+        if len(scores.columns.intersection(stripped)) > 0:
+            groups.index = stripped
 
     # Check overlap
     common_cells = scores.columns.intersection(groups.index)
@@ -869,6 +899,7 @@ def run_differential(args: argparse.Namespace) -> int:
             logger.info(
                 f"Interactive volcano plot saved to {args.output / 'volcano_plot.html'}"
             )
+            _open_file(str(args.output / "volcano_plot.html"))
         else:
             import matplotlib
 
@@ -882,6 +913,7 @@ def run_differential(args: argparse.Namespace) -> int:
                 save=str(args.output / "volcano_plot.png"),
             )
             logger.info(f"Volcano plot saved to {args.output / 'volcano_plot.png'}")
+            _open_file(str(args.output / "volcano_plot.png"))
 
     logger.info("Differential analysis complete!")
     return 0
@@ -995,6 +1027,7 @@ def run_cluster(args: argparse.Namespace) -> int:
             logger.info(
                 f"Interactive plot saved to {args.output / 'embedding_plot.html'}"
             )
+            _open_file(str(args.output / "embedding_plot.html"))
         else:
             import matplotlib
 
@@ -1010,6 +1043,7 @@ def run_cluster(args: argparse.Namespace) -> int:
                 save=str(args.output / "embedding_plot.png"),
             )
             logger.info(f"Plot saved to {args.output / 'embedding_plot.png'}")
+            _open_file(str(args.output / "embedding_plot.png"))
 
     logger.info("Clustering analysis complete!")
     return 0
@@ -1059,7 +1093,7 @@ def run_pathway(args: argparse.Namespace) -> int:
 
     # Load metabolic model
     logger.info(f"Loading metabolic model: {args.model}")
-    model = load_gem(args.model)
+    model = load_gem(args.model, auto_confirm=getattr(args, "yes", False))
 
     # Get background reactions
     if args.background:
@@ -1192,6 +1226,7 @@ def run_pathway(args: argparse.Namespace) -> int:
             logger.info(
                 f"Interactive plot saved to {args.output / 'enrichment_plot.html'}"
             )
+            _open_file(str(args.output / "enrichment_plot.html"))
         else:
             import matplotlib
 
@@ -1205,6 +1240,7 @@ def run_pathway(args: argparse.Namespace) -> int:
                 save=str(args.output / "enrichment_plot.png"),
             )
             logger.info(f"Plot saved to {args.output / 'enrichment_plot.png'}")
+            _open_file(str(args.output / "enrichment_plot.png"))
 
     logger.info("Pathway enrichment analysis complete!")
     return 0
@@ -1234,7 +1270,7 @@ def run_report(args: argparse.Namespace) -> int:
 
     logger.info(f"Generating report from: {args.results}")
 
-    output_path = args.output if args.output else args.results / "report.html"
+    output_path = args.output
 
     try:
         report_path = generate_html_report(
@@ -1285,7 +1321,8 @@ def run_batch_correct(args: argparse.Namespace) -> int:
 
     # Load batch labels
     logger.info(f"Loading batch labels from {args.batches}")
-    batch_df = pd.read_csv(args.batches)
+    sep = "\t" if str(args.batches).endswith((".tsv", ".txt")) else ","
+    batch_df = pd.read_csv(args.batches, sep=sep)
 
     if "cell_id" in batch_df.columns and "batch" in batch_df.columns:
         batch_labels = pd.Series(batch_df["batch"].values, index=batch_df["cell_id"])
@@ -1294,6 +1331,12 @@ def run_batch_correct(args: argparse.Namespace) -> int:
     else:
         logger.error("Batch file must have cell_id and batch columns")
         return 1
+
+    # Normalize barcodes: strip 10x GEM well suffix (e.g. -1) if scores use bare barcodes
+    if len(scores.columns.intersection(batch_labels.index)) == 0:
+        stripped = batch_labels.index.str.replace(r"-\d+$", "", regex=True)
+        if len(scores.columns.intersection(stripped)) > 0:
+            batch_labels.index = stripped
 
     # Align cells
     common_cells = scores.columns.intersection(batch_labels.index)
@@ -1500,6 +1543,7 @@ def run_trajectory(args: argparse.Namespace) -> int:
         plt.savefig(args.output / "trajectory_plot.png", dpi=150)
         plt.close()
         logger.info(f"Plot saved to {args.output / 'trajectory_plot.png'}")
+        _open_file(str(args.output / "trajectory_plot.png"))
 
     logger.info("Trajectory analysis complete!")
     return 0
@@ -1521,7 +1565,7 @@ def show_model_info(args: argparse.Namespace) -> int:
     from cellmetpro.models import get_subsystem_reactions, load_gem
 
     try:
-        model = load_gem(args.model)
+        model = load_gem(args.model, auto_confirm=getattr(args, "yes", False))
     except (FileNotFoundError, ValueError) as e:
         logger.error(str(e))
         return 1
@@ -1566,7 +1610,10 @@ def main(argv: list[str] | None = None) -> int:
     int
         Exit code.
     """
+    import argcomplete
+
     parser = create_parser()
+    argcomplete.autocomplete(parser)
     args = parser.parse_args(argv)
 
     if args.verbose:

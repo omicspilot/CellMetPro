@@ -671,11 +671,13 @@ def main() -> None:
 
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("""
+    st.sidebar.markdown(
+        """
         **CellMetPro Dashboard**
 
         [Documentation](https://omicspilot.com/projects/cellmetpro)
-        """)
+        """
+    )
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ def plot_embedding(
     categorical_palette: str = "husl",
     point_size: float = 20,
     alpha: float = 0.7,
-    figsize: tuple[float, float] = (8, 6),
+    figsize: tuple[float, float] = (10, 7),
     ax: Axes | None = None,
     legend: bool = True,
     legend_loc: str = "best",
@@ -184,7 +184,17 @@ def _plot_categorical(
         )
 
     if legend:
-        ax.legend(loc=legend_loc, frameon=False)
+        n_cats = len(unique_categories)
+        if legend_loc == "best" and n_cats > 10:
+            ax.legend(
+                loc="upper right",
+                bbox_to_anchor=(1.02, 1),
+                borderaxespad=0,
+                frameon=False,
+                fontsize=8,
+            )
+        else:
+            ax.legend(loc=legend_loc, frameon=False)
 
 
 def plot_metabolic_umap(

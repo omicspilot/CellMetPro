@@ -1006,3 +1006,259 @@ class TestInteractiveFeatureExpression:
             feature_names=["R0", "R1", "R2"],
         )
         assert isinstance(fig, Figure)
+
+
+# =============================================================================
+# TESTS FOR PCA VARIANCE AND FEATURE-ON-EMBEDDING PLOTS
+# =============================================================================
+
+
+class TestPcaVariancePlot:
+    """Tests for plot_pca_variance."""
+
+    @pytest.fixture
+    def pca_model(self):
+        """Create a fitted PCA model."""
+        from sklearn.decomposition import PCA
+
+        np.random.seed(42)
+        X = np.random.rand(50, 20)
+        pca = PCA(n_components=10)
+        pca.fit(X)
+        return pca
+
+    def test_returns_axes(self, pca_model):
+        """Test that plot_pca_variance returns Axes."""
+        from cellmetpro.visualization.umap import plot_pca_variance
+
+        ax = plot_pca_variance(pca_model)
+        assert isinstance(ax, plt.Axes)
+        plt.close()
+
+    def test_cumulative_line_shown(self, pca_model):
+        """Test with cumulative=True (default)."""
+        from cellmetpro.visualization.umap import plot_pca_variance
+
+        ax = plot_pca_variance(pca_model, cumulative=True)
+        # Should have at least 2 artists (bars + line)
+        assert len(ax.lines) > 0
+        plt.close()
+
+    def test_no_cumulative(self, pca_model):
+        """Test with cumulative=False."""
+        from cellmetpro.visualization.umap import plot_pca_variance
+
+        ax = plot_pca_variance(pca_model, cumulative=False)
+        assert isinstance(ax, plt.Axes)
+        assert len(ax.lines) == 0
+        plt.close()
+
+    def test_n_components_capped(self, pca_model):
+        """Test that n_components is capped by the model's actual components."""
+        from cellmetpro.visualization.umap import plot_pca_variance
+
+        # Request more components than the model has (10)
+        ax = plot_pca_variance(pca_model, n_components=50)
+        assert isinstance(ax, plt.Axes)
+        plt.close()
+
+    def test_save(self, pca_model, tmp_path):
+        """Test saving the figure."""
+        from cellmetpro.visualization.umap import plot_pca_variance
+
+        save_path = tmp_path / "pca_variance.png"
+        plot_pca_variance(pca_model, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+
+class TestPlotFeatureOnEmbedding:
+    """Tests for plot_feature_on_embedding."""
+
+    @pytest.fixture
+    def small_embedding(self):
+        np.random.seed(42)
+        return np.random.randn(30, 2)
+
+    @pytest.fixture
+    def small_reaction_scores(self):
+        np.random.seed(42)
+        reactions = [f"R{i}" for i in range(6)]
+        cells = [f"cell_{i}" for i in range(30)]
+        return pd.DataFrame(np.random.rand(6, 30), index=reactions, columns=cells)
+
+    def test_returns_figure(self, small_embedding, small_reaction_scores):
+        """Test that plot_feature_on_embedding returns a Figure."""
+        from cellmetpro.visualization.umap import plot_feature_on_embedding
+
+        fig = plot_feature_on_embedding(
+            small_embedding,
+            small_reaction_scores,
+            feature_names=["R0", "R1", "R2"],
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_grid_layout(self, small_embedding, small_reaction_scores):
+        """Test that the grid accommodates all requested features."""
+        from cellmetpro.visualization.umap import plot_feature_on_embedding
+
+        fig = plot_feature_on_embedding(
+            small_embedding,
+            small_reaction_scores,
+            feature_names=["R0", "R1", "R2", "R3"],
+            ncols=2,
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_missing_feature_handled(self, small_embedding, small_reaction_scores):
+        """Test graceful handling of feature names not in the DataFrame."""
+        from cellmetpro.visualization.umap import plot_feature_on_embedding
+
+        fig = plot_feature_on_embedding(
+            small_embedding,
+            small_reaction_scores,
+            feature_names=["R0", "NONEXISTENT"],
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_single_feature(self, small_embedding, small_reaction_scores):
+        """Test with a single feature."""
+        from cellmetpro.visualization.umap import plot_feature_on_embedding
+
+        fig = plot_feature_on_embedding(
+            small_embedding,
+            small_reaction_scores,
+            feature_names=["R0"],
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_save(self, small_embedding, small_reaction_scores, tmp_path):
+        """Test saving the figure."""
+        from cellmetpro.visualization.umap import plot_feature_on_embedding
+
+        save_path = tmp_path / "features.png"
+        plot_feature_on_embedding(
+            small_embedding,
+            small_reaction_scores,
+            feature_names=["R0", "R1"],
+            save=str(save_path),
+        )
+        assert save_path.exists()
+        plt.close()
+
+
+class TestCategoricalLegendPlacement:
+    """Tests for _plot_categorical legend logic (>10 categories → outside)."""
+
+    def test_many_categories_legend_outside(self):
+        """With >10 categories the legend should be placed outside the axes."""
+        from cellmetpro.visualization.umap import plot_embedding
+
+        np.random.seed(42)
+        n = 150
+        embedding = np.random.randn(n, 2)
+        # 15 distinct string categories
+        categories = np.array([f"cluster_{i}" for i in range(15)] * 10)
+
+        ax = plot_embedding(embedding, color=categories, legend=True)
+        assert isinstance(ax, plt.Axes)
+        legend = ax.get_legend()
+        assert legend is not None
+        plt.close()
+
+    def test_few_categories_legend_inside(self):
+        """With ≤10 categories the legend stays inside (default loc)."""
+        from cellmetpro.visualization.umap import plot_embedding
+
+        np.random.seed(42)
+        embedding = np.random.randn(50, 2)
+        categories = np.array(["A"] * 25 + ["B"] * 25)
+
+        ax = plot_embedding(embedding, color=categories, legend=True)
+        legend = ax.get_legend()
+        assert legend is not None
+        plt.close()
+
+
+# =============================================================================
+# TESTS FOR PATHWAY HEATMAP
+# =============================================================================
+
+
+class TestPlotPathwayHeatmap:
+    """Tests for plot_pathway_heatmap."""
+
+    @pytest.fixture
+    def pathway_scores(self):
+        np.random.seed(42)
+        pathways = [f"PATH_{i}" for i in range(15)]
+        cells = [f"cell_{i}" for i in range(20)]
+        return pd.DataFrame(np.random.rand(15, 20), index=pathways, columns=cells)
+
+    @pytest.fixture
+    def groups_20(self):
+        cells = [f"cell_{i}" for i in range(20)]
+        return pd.Series(["A"] * 10 + ["B"] * 10, index=cells)
+
+    def test_returns_figure(self, pathway_scores, groups_20):
+        """Test that plot_pathway_heatmap returns a Figure."""
+        from cellmetpro.visualization.heatmap import plot_pathway_heatmap
+
+        fig = plot_pathway_heatmap(pathway_scores, groups_20, n_top=5)
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_specific_pathways(self, pathway_scores, groups_20):
+        """Test with explicit pathway list."""
+        from cellmetpro.visualization.heatmap import plot_pathway_heatmap
+
+        fig = plot_pathway_heatmap(
+            pathway_scores, groups_20, pathways=["PATH_0", "PATH_1"]
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_no_scale(self, pathway_scores, groups_20):
+        """Test without z-score scaling."""
+        from cellmetpro.visualization.heatmap import plot_pathway_heatmap
+
+        fig = plot_pathway_heatmap(pathway_scores, groups_20, scale=False, n_top=5)
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_median_aggregation(self, pathway_scores, groups_20):
+        """Test median aggregation method."""
+        from cellmetpro.visualization.heatmap import plot_pathway_heatmap
+
+        fig = plot_pathway_heatmap(
+            pathway_scores, groups_20, agg_method="median", n_top=5
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_no_clustering(self, pathway_scores, groups_20):
+        """Test with row/col clustering disabled."""
+        from cellmetpro.visualization.heatmap import plot_pathway_heatmap
+
+        fig = plot_pathway_heatmap(
+            pathway_scores,
+            groups_20,
+            cluster_rows=False,
+            cluster_cols=False,
+            n_top=5,
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_save(self, pathway_scores, groups_20, tmp_path):
+        """Test saving the figure."""
+        from cellmetpro.visualization.heatmap import plot_pathway_heatmap
+
+        save_path = tmp_path / "pathway_heatmap.png"
+        plot_pathway_heatmap(pathway_scores, groups_20, n_top=5, save=str(save_path))
+        assert save_path.exists()
+        plt.close()

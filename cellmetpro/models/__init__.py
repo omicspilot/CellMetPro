@@ -32,6 +32,55 @@ MODEL_URLS = {
 }
 
 
+def _download_model(url: str, dest: Path, auto_confirm: bool = False) -> None:
+    """Download a model file from a URL with progress display.
+
+    Parameters
+    ----------
+    url : str
+        URL to download from.
+    dest : Path
+        Destination file path.
+    """
+    import urllib.request
+
+    if not auto_confirm:
+        print(f"\nModel '{dest.stem}' not found locally.")
+        print(f"  Source: {url}")
+        print(f"  Destination: {dest}")
+        answer = input("Download now? [y/N] ").strip().lower()
+        if answer != "y":
+            raise RuntimeError("Download cancelled by user.")
+
+    print(f"Downloading model: {dest.name}")
+    print(f"  Source: {url}")
+    print(f"  Destination: {dest}")
+
+    def _reporthook(block_num: int, block_size: int, total_size: int) -> None:
+        downloaded = block_num * block_size
+        if total_size > 0:
+            pct = min(100, downloaded * 100 // total_size)
+            mb = downloaded / 1_048_576
+            total_mb = total_size / 1_048_576
+            print(
+                f"\r  Progress: {pct:3d}%  {mb:.1f}/{total_mb:.1f} MB",
+                end="",
+                flush=True,
+            )
+        else:
+            mb = downloaded / 1_048_576
+            print(f"\r  Downloaded: {mb:.1f} MB", end="", flush=True)
+
+    try:
+        urllib.request.urlretrieve(url, dest, reporthook=_reporthook)
+        print()  # newline after progress
+        logger.info(f"Downloaded model to {dest}")
+    except Exception as e:
+        if dest.exists():
+            dest.unlink()
+        raise RuntimeError(f"Failed to download model from {url}: {e}") from e
+
+
 def load_human_gem() -> cobra.Model:
     """Load the human genome-scale metabolic model.
 
@@ -66,7 +115,7 @@ def load_mouse_gem() -> cobra.Model:
     return load_gem("mouse")
 
 
-def load_gem(organism: str) -> cobra.Model:
+def load_gem(organism: str, auto_confirm: bool = False) -> cobra.Model:
     """Load a GEM model by organism name or file path.
 
     Parameters
@@ -111,11 +160,13 @@ def load_gem(organism: str) -> cobra.Model:
                 logger.info(f"Loading cached model from {cached_path}")
                 return load_model_from_file(cached_path)
 
-        raise FileNotFoundError(
-            f"Model '{organism}' not found. Please download it manually from:\n"
-            f"  {MODEL_URLS[organism_lower]}\n"
-            f"and place it in: {GEMS_DIR}"
-        )
+        # Auto-download the model
+        url = MODEL_URLS[organism_lower]
+        suffix = Path(url).suffix
+        cached_path = cache_dir / f"{organism_lower}{suffix}"
+        logger.info(f"Downloading {organism} model from {url} ...")
+        _download_model(url, cached_path, auto_confirm=auto_confirm)
+        return load_model_from_file(cached_path)
 
     supported = list(MODEL_URLS.keys())
     formats = ", ".join(SUPPORTED_FORMATS)

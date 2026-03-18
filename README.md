@@ -1,5 +1,9 @@
 # CellMetPro
 
+[![CI](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml/badge.svg)](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/omicspilot/CellMetPro/branch/main/graph/badge.svg)](https://codecov.io/gh/omicspilot/CellMetPro)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Cellular Metabolic Profiler for scRNA-seq data**
 
 Analyze metabolic activity at single-cell resolution using the COMPASS algorithm. Score reactions, identify metabolic heterogeneity, and discover metabolic programs in your scRNA-seq data.
@@ -124,7 +128,7 @@ plot_volcano(diff_results, save="volcano.png")
 | Format | Extension | Description |
 |--------|-----------|-------------|
 | AnnData | `.h5ad` | Scanpy/AnnData objects |
-| Seurat | `.rds` | Seurat objects (requires R + rpy2) |
+| Seurat | `.rds` | Seurat objects (requires R or rpy2) |
 | CSV | `.csv` | Comma-separated values |
 | TSV | `.tsv` | Tab-separated values |
 | MTX | `.mtx` | 10x Genomics sparse matrix |
@@ -173,7 +177,15 @@ Then load directly: `adata = ad.read_h5ad("output.h5ad")`
 |-------|----------|-----------|-------|
 | `human` | Homo sapiens | ~13,000 | ~3,000 |
 | `mouse` | Mus musculus | ~13,000 | ~3,000 |
+| `recon2` | Homo sapiens | ~7,800 | ~1,900 |
+| `recon3d` | Homo sapiens | ~13,500 | ~2,200 |
 | Custom | Any | User-defined | User-defined |
+
+Models are downloaded automatically on first use and cached locally. You will be prompted to confirm before any download starts. To skip the prompt:
+
+```bash
+cellmetpro run expression.h5ad -m human -o results/ --yes
+```
 
 ---
 
@@ -185,8 +197,19 @@ Then load directly: `adata = ad.read_h5ad("output.h5ad")`
 | `cellmetpro differential` | Compare groups statistically |
 | `cellmetpro cluster` | Cluster cells by metabolic profile |
 | `cellmetpro pathway` | Pathway enrichment analysis |
+| `cellmetpro batch-correct` | Batch effect correction |
+| `cellmetpro trajectory` | Trajectory and pseudotime analysis |
+| `cellmetpro report` | Generate HTML analysis report |
 | `cellmetpro info` | Show model information |
 | `cellmetpro dashboard` | Launch interactive dashboard |
+
+**Global flags** available on all commands:
+
+| Flag | Description |
+|------|-------------|
+| `-v`, `--version` | Show version and exit |
+| `--verbose` | Enable verbose/debug output |
+| `-y`, `--yes` | Auto-confirm all prompts (e.g. model downloads) |
 
 Run `cellmetpro --help` or `cellmetpro <command> --help` for details.
 
@@ -271,6 +294,31 @@ plot_enrichment_dotplot(enrichment_results)
 
 ---
 
+## Tab Completion
+
+CellMetPro supports shell tab completion via `argcomplete`. After installation, activate it once for your shell:
+
+```bash
+# bash — add to ~/.bashrc
+eval "$(register-python-argcomplete cellmetpro)"
+
+# zsh — add to ~/.zshrc
+eval "$(register-python-argcomplete cellmetpro)"
+
+# fish — add to ~/.config/fish/config.fish
+register-python-argcomplete --shell fish cellmetpro | source
+```
+
+With a conda environment, you can activate it automatically on `conda activate`:
+
+```bash
+mkdir -p "$CONDA_PREFIX/etc/conda/activate.d"
+echo 'eval "$(register-python-argcomplete cellmetpro)"' \
+  > "$CONDA_PREFIX/etc/conda/activate.d/cellmetpro-completion.sh"
+```
+
+---
+
 ## Background
 
 **COMPASS** (Characterizing Cell states through metabolic Profiling of the Transcriptome) integrates scRNA-seq data with Genome-Scale Metabolic Models (GEMs) to infer metabolic activity at single-cell resolution.
@@ -302,7 +350,3 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Links
 
 - **Issues**: [github.com/omicspilot/CellMetPro/issues](https://github.com/omicspilot/CellMetPro/issues)
-- [![CI](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml/badge.svg)](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml)
-- [![codecov](https://codecov.io/gh/omicspilot/CellMetPro/branch/main/graph/badge.svg)](https://codecov.io/gh/omicspilot/CellMetPro)
-
-- [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

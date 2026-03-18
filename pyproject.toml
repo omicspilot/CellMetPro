@@ -39,13 +39,14 @@ dependencies = [
     "umap-learn>=0.5",
     "cobra>=0.26",
     "rich-argparse>=1.4",
+    "argcomplete>=3.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "black>=23.0",
+    "black==25.12.0",
     "ruff>=0.1",
     "mypy>=1.0",
 ]

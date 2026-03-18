@@ -455,7 +455,7 @@ class CompassScorer:
             reaction_expression = self._evaluate_gprs_vectorized(
                 reactions_with_gpr,
                 expr_array,
-                and_func,
+                and_func,  # type: ignore[arg-type]
                 or_func,  # type: ignore[arg-type]
             )
         else:
@@ -639,7 +639,7 @@ class CompassScorer:
         return self._evaluate_gpr_recursive(
             gpr_rule.upper(),
             expression,
-            and_func,
+            and_func,  # type: ignore[arg-type]
             or_func,  # type: ignore[arg-type]
         )
 

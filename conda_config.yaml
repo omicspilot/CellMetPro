@@ -1,4 +1,4 @@
-name: cellMetPro
+name: cellmetpro
 channels:
   - conda-forge
   - bioconda

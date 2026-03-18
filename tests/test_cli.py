@@ -251,7 +251,7 @@ class TestCLIVerbose:
         from cellmetpro.cli import create_parser
 
         parser = create_parser()
-        args = parser.parse_args(["-v", "--version"])
+        args = parser.parse_args(["--verbose"])
 
         assert args.verbose is True
 
@@ -259,8 +259,8 @@ class TestCLIVerbose:
         """Test verbose mode shows traceback on error."""
         from cellmetpro.cli import main
 
-        # This should fail and show traceback with -v
-        result = main(["-v", "run", str(tmp_path / "nonexistent.h5ad")])
+        # This should fail and show traceback with --verbose
+        result = main(["--verbose", "run", str(tmp_path / "nonexistent.h5ad")])
 
         assert result == 1
 

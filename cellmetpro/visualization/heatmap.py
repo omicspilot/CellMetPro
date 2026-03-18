@@ -90,9 +90,10 @@ def plot_pathway_heatmap(
     group_labels = groups[common_cells]
 
     # Aggregate by group
-    agg_func = np.mean if agg_method == "mean" else np.median
-    grouped = plot_data.T.groupby(group_labels).apply(lambda x: agg_func(x, axis=0))
-    grouped = grouped.T
+    if agg_method == "mean":
+        grouped = plot_data.T.groupby(group_labels).mean().T
+    else:
+        grouped = plot_data.T.groupby(group_labels).median().T
 
     # Scale if requested
     if scale:
@@ -331,9 +332,10 @@ def plot_grouped_heatmap(
     group_labels = groups[common_cells]
 
     # Aggregate by group
-    agg_func = np.mean if agg_method == "mean" else np.median
-    grouped = plot_data.T.groupby(group_labels).apply(lambda x: agg_func(x, axis=0))
-    grouped = grouped.T
+    if agg_method == "mean":
+        grouped = plot_data.T.groupby(group_labels).mean().T
+    else:
+        grouped = plot_data.T.groupby(group_labels).median().T
 
     # Scale if requested
     if scale:

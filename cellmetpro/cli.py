@@ -262,8 +262,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("differential_results"),
-        help="Output directory (default: differential_results/)",
+        default=Path("results/differential"),
+        help="Output directory (default: results/differential/)",
     )
     diff_parser.add_argument(
         "--group1",
@@ -320,8 +320,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("clustering_results"),
-        help="Output directory (default: clustering_results/)",
+        default=Path("results/clustering"),
+        help="Output directory (default: results/clustering/)",
     )
     cluster_parser.add_argument(
         "--n-clusters",
@@ -382,8 +382,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("pathway_results"),
-        help="Output directory (default: pathway_results/)",
+        default=Path("results/pathway"),
+        help="Output directory (default: results/pathway/)",
     )
     pathway_parser.add_argument(
         "--model",
@@ -451,6 +451,7 @@ Examples:
         "-o",
         "--output",
         type=Path,
+        default=Path("results/report.html"),
         help="Output HTML file (default: results/report.html)",
     )
     report_parser.add_argument(
@@ -486,8 +487,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("batch_corrected"),
-        help="Output directory (default: batch_corrected/)",
+        default=Path("results/batch_corrected"),
+        help="Output directory (default: results/batch_corrected/)",
     )
     batch_parser.add_argument(
         "--method",
@@ -517,8 +518,8 @@ Examples:
         "-o",
         "--output",
         type=Path,
-        default=Path("trajectory_results"),
-        help="Output directory (default: trajectory_results/)",
+        default=Path("results/trajectory"),
+        help="Output directory (default: results/trajectory/)",
     )
     traj_parser.add_argument(
         "--root-cell",
@@ -1242,7 +1243,7 @@ def run_report(args: argparse.Namespace) -> int:
 
     logger.info(f"Generating report from: {args.results}")
 
-    output_path = args.output if args.output else args.results / "report.html"
+    output_path = args.output
 
     try:
         report_path = generate_html_report(

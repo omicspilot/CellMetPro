@@ -801,16 +801,24 @@ def run_differential(args: argparse.Namespace) -> int:
 
     # Load group labels
     logger.info(f"Loading group labels from {args.groups}")
-    groups_df = pd.read_csv(args.groups)
+    sep = "\t" if str(args.groups).endswith((".tsv", ".txt")) else ","
+    groups_df = pd.read_csv(args.groups, sep=sep)
 
     # Handle different group file formats
-    if "cell_id" in groups_df.columns and "group" in groups_df.columns:
-        groups = pd.Series(groups_df["group"].values, index=groups_df["cell_id"])
+    group_col = "group" if "group" in groups_df.columns else groups_df.columns[1]
+    if "cell_id" in groups_df.columns:
+        groups = pd.Series(groups_df[group_col].values, index=groups_df["cell_id"])
     elif groups_df.shape[1] == 2:
         groups = pd.Series(groups_df.iloc[:, 1].values, index=groups_df.iloc[:, 0])
     else:
         # Assume first column is index
         groups = pd.Series(groups_df.iloc[:, 0].values, index=groups_df.index)
+
+    # Normalize barcodes: strip 10x GEM well suffix (e.g. -1) if scores use bare barcodes
+    if len(scores.columns.intersection(groups.index)) == 0:
+        stripped = groups.index.str.replace(r"-\d+$", "", regex=True)
+        if len(scores.columns.intersection(stripped)) > 0:
+            groups.index = stripped
 
     # Check overlap
     common_cells = scores.columns.intersection(groups.index)
@@ -1294,7 +1302,8 @@ def run_batch_correct(args: argparse.Namespace) -> int:
 
     # Load batch labels
     logger.info(f"Loading batch labels from {args.batches}")
-    batch_df = pd.read_csv(args.batches)
+    sep = "\t" if str(args.batches).endswith((".tsv", ".txt")) else ","
+    batch_df = pd.read_csv(args.batches, sep=sep)
 
     if "cell_id" in batch_df.columns and "batch" in batch_df.columns:
         batch_labels = pd.Series(batch_df["batch"].values, index=batch_df["cell_id"])
@@ -1303,6 +1312,12 @@ def run_batch_correct(args: argparse.Namespace) -> int:
     else:
         logger.error("Batch file must have cell_id and batch columns")
         return 1
+
+    # Normalize barcodes: strip 10x GEM well suffix (e.g. -1) if scores use bare barcodes
+    if len(scores.columns.intersection(batch_labels.index)) == 0:
+        stripped = batch_labels.index.str.replace(r"-\d+$", "", regex=True)
+        if len(scores.columns.intersection(stripped)) > 0:
+            batch_labels.index = stripped
 
     # Align cells
     common_cells = scores.columns.intersection(batch_labels.index)

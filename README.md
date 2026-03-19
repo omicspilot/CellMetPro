@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml/badge.svg)](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/omicspilot/CellMetPro/branch/main/graph/badge.svg)](https://codecov.io/gh/omicspilot/CellMetPro)
+[![PyPI version](https://img.shields.io/pypi/v/cellmetpro.svg)](https://pypi.org/project/cellmetpro/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Cellular Metabolic Profiler for scRNA-seq data**

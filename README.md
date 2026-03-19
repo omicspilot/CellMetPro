@@ -8,6 +8,9 @@
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
     <a href="https://pypi.org/project/cellmetpro/"><img src="https://img.shields.io/pypi/v/cellmetpro.svg" alt="PyPI version"></a>
     <a href="https://codecov.io/gh/omicspilot/CellMetPro"><img src="https://codecov.io/gh/omicspilot/CellMetPro/branch/main/graph/badge.svg" alt="Codecov"></a>
+    <a href="https://codecov.io/gh/omicspilot/CellMetPro" > 
+    <img src="https://codecov.io/gh/omicspilot/CellMetPro/graph/badge.svg?token=MG2SN7O9H1"/> 
+    </a>
     <br/>
     <a href="https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml"><img src="https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml/badge.svg" alt="CI workflow"></a>
     <a href="https://github.com/omicspilot/CellMetPro/commits/main"><img src="https://img.shields.io/github/last-commit/omicspilot/CellMetPro/main" alt="GitHub last commit"></a>
@@ -15,7 +18,6 @@
 </div>
 
 ---
-
 
 > **Documentation**: For detailed tutorials and API reference, visit [omicspilot.com/projects/cellmetpro](https://omicspilot.com/projects/cellmetpro)
 
@@ -185,11 +187,11 @@ Then load directly: `adata = ad.read_h5ad("output.h5ad")`
 
 ## Supported Models
 
-| Model     | Organism     | Reactions    | Genes        |
-| --------- | ------------ | ------------ | ------------ |
-| `human`   | Homo sapiens | ~13,000      | ~3,000       |
-| `mouse`   | Mus musculus | ~13,000      | ~3,000       |
-| Custom    | Any          | User-defined | User-defined |
+| Model   | Organism     | Reactions    | Genes        |
+| ------- | ------------ | ------------ | ------------ |
+| `human` | Homo sapiens | ~13,000      | ~3,000       |
+| `mouse` | Mus musculus | ~13,000      | ~3,000       |
+| Custom  | Any          | User-defined | User-defined |
 
 Models are downloaded automatically on first use and cached locally. You will be prompted to confirm before any download starts. To skip the prompt:
 
@@ -360,4 +362,3 @@ research, please cite the original COMPASS paper:
 ```
 
 Original COMPASS implementation: https://github.com/wagnerlab-berkeley/Compass
-

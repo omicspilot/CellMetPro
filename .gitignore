@@ -147,3 +147,5 @@ work/
 
 
 .claude
+*.html
+cellmetpro/models/*

@@ -675,7 +675,7 @@ def main() -> None:
         """
         **CellMetPro Dashboard**
 
-        [Documentation](https://omicspilot.com/projects/cellmetpro)
+        [Documentation](https://omicspilot.com/tools/cellmetpro)
         """
     )
 

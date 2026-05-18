@@ -16,7 +16,7 @@
 
 ---
 
-> **Documentation**: For detailed tutorials and API reference, visit [omicspilot.com/projects/cellmetpro](https://omicspilot.com/projects/cellmetpro)
+> **Documentation**: For detailed tutorials and API reference, visit [omicspilot.com/tools/cellmetpro](https://omicspilot.com/tools/cellmetpro)
 
 ---
 

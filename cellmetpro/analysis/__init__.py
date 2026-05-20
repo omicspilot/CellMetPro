@@ -13,7 +13,7 @@ from .clustering import (
     evaluate_clustering,
     find_optimal_clusters,
 )
-from .differential import DifferentialAnalysis
+from .differential import DifferentialAnalysis, PseudoBulkAnalysis
 from .pathway import PathwayAnalyzer
 from .perturbation import (
     compare_flux_distributions,
@@ -35,6 +35,7 @@ from .trajectory import (
 __all__ = [
     "MetabolicClustering",
     "DifferentialAnalysis",
+    "PseudoBulkAnalysis",
     "PathwayAnalyzer",
     # Clustering utilities
     "find_optimal_clusters",

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cellmetpro.analysis.differential import DifferentialAnalysis
+from cellmetpro.analysis.differential import DifferentialAnalysis, PseudoBulkAnalysis
 
 
 @pytest.fixture
@@ -968,3 +968,315 @@ class TestDifferentialEdgeCases:
 
         # log2fc should be finite (not inf)
         assert np.isfinite(result["log2fc"].iloc[0])
+
+
+# =============================================================================
+# FIXTURES FOR PSEUDO-BULK TESTS
+# =============================================================================
+# Design: 3 reactions, 4 samples (2 per group), 5 cells each = 20 cells total.
+# R1 is spiked higher in group B to give a detectable signal.
+
+
+@pytest.fixture
+def pb_scores():
+    """Reaction scores (reactions x cells): 3 reactions, 20 cells."""
+    np.random.seed(0)
+    reactions = ["R1", "R2", "R3"]
+    cells = [f"cell_{i}" for i in range(20)]
+    data = np.random.rand(3, 20)
+    # R1 clearly higher in group B (cells 10-19, samples s3/s4)
+    data[0, 10:] += 3.0
+    return pd.DataFrame(data, index=reactions, columns=cells)
+
+
+@pytest.fixture
+def pb_groups():
+    """Group labels: cells 0-9 → group A, cells 10-19 → group B."""
+    cells = [f"cell_{i}" for i in range(20)]
+    return pd.Series(["A"] * 10 + ["B"] * 10, index=cells)
+
+
+@pytest.fixture
+def pb_samples():
+    """Sample labels: s1/s2 in group A (5 cells each), s3/s4 in group B."""
+    cells = [f"cell_{i}" for i in range(20)]
+    return pd.Series(
+        ["s1"] * 5 + ["s2"] * 5 + ["s3"] * 5 + ["s4"] * 5, index=cells
+    )
+
+
+# =============================================================================
+# TESTS FOR PseudoBulkAnalysis.aggregate()
+# =============================================================================
+
+
+def test_aggregate_returns_dataframe(pb_scores, pb_groups, pb_samples):
+    """aggregate() should return a DataFrame of shape (reactions x samples)."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.aggregate()
+
+    assert isinstance(result, pd.DataFrame)
+    assert result.shape == (3, 4)  # 3 reactions, 4 samples
+    assert set(result.columns) == {"s1", "s2", "s3", "s4"}
+    assert list(result.index) == ["R1", "R2", "R3"]
+
+
+def test_aggregate_mean_correct(pb_scores, pb_groups, pb_samples):
+    """Mean aggregation should match manual per-sample average."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.aggregate(method="mean")
+
+    # s1 contains cells 0-4
+    s1_cells = [f"cell_{i}" for i in range(5)]
+    expected_s1_r1 = pb_scores.loc["R1", s1_cells].mean()
+    np.testing.assert_almost_equal(result.loc["R1", "s1"], expected_s1_r1)
+
+
+def test_aggregate_sum_correct(pb_scores, pb_groups, pb_samples):
+    """Sum aggregation should match manual per-sample sum."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.aggregate(method="sum")
+
+    s3_cells = [f"cell_{i}" for i in range(10, 15)]
+    expected_s3_r2 = pb_scores.loc["R2", s3_cells].sum()
+    np.testing.assert_almost_equal(result.loc["R2", "s3"], expected_s3_r2)
+
+
+def test_aggregate_sample_in_multiple_groups_raises(pb_scores, pb_groups, pb_samples):
+    """aggregate() must raise if one sample has cells in two different groups."""
+    # Corrupt one cell's group so s1 spans both A and B
+    bad_groups = pb_groups.copy()
+    bad_groups["cell_0"] = "B"
+
+    pb = PseudoBulkAnalysis(pb_scores, bad_groups, pb_samples)
+    with pytest.raises(ValueError, match="multiple groups"):
+        pb.aggregate()
+
+
+def test_aggregate_partial_cell_overlap(pb_scores, pb_groups, pb_samples):
+    """aggregate() uses only cells present in all three inputs."""
+    # Drop a few cells from groups so they're missing
+    trimmed_groups = pb_groups.drop(["cell_0", "cell_1"])
+    pb = PseudoBulkAnalysis(pb_scores, trimmed_groups, pb_samples)
+    result = pb.aggregate()
+
+    # Should still return 4 samples (s1 just has 3 cells instead of 5)
+    assert result.shape[1] == 4
+
+
+# =============================================================================
+# TESTS FOR PseudoBulkAnalysis.compare_groups()
+# =============================================================================
+
+
+def test_compare_groups_pb_returns_dataframe(pb_scores, pb_groups, pb_samples):
+    """compare_groups() should return a DataFrame with expected columns."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.compare_groups("A", "B")
+
+    assert isinstance(result, pd.DataFrame)
+    expected_cols = [
+        "reaction",
+        "group1_mean",
+        "group2_mean",
+        "log2fc",
+        "statistic",
+        "pvalue",
+        "padj_bh",
+        "padj_bonf",
+        "group1_n_samples",
+        "group2_n_samples",
+    ]
+    for col in expected_cols:
+        assert col in result.columns
+
+
+def test_compare_groups_pb_n_samples_correct(pb_scores, pb_groups, pb_samples):
+    """n_samples columns should reflect the number of replicates per group."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.compare_groups("A", "B")
+
+    assert (result["group1_n_samples"] == 2).all()
+    assert (result["group2_n_samples"] == 2).all()
+
+
+def test_compare_groups_pb_log2fc_direction(pb_scores, pb_groups, pb_samples):
+    """R1 was spiked in group B → log2fc should be positive (B > A)."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.compare_groups("A", "B")
+
+    r1_row = result[result["reaction"] == "R1"].iloc[0]
+    assert r1_row["log2fc"] > 0, f"Expected positive log2fc for R1, got {r1_row['log2fc']}"
+
+
+def test_compare_groups_pb_detects_signal(pb_scores, pb_groups, pb_samples):
+    """R1 has a large spike so its p-value should be the lowest."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.compare_groups("A", "B")
+
+    r1_pval = result[result["reaction"] == "R1"]["pvalue"].iloc[0]
+    other_pvals = result[result["reaction"] != "R1"]["pvalue"]
+    assert r1_pval < other_pvals.min(), "R1 should have the smallest p-value"
+
+
+def test_compare_groups_pb_sorted_by_pvalue(pb_scores, pb_groups, pb_samples):
+    """Results should be sorted by p-value ascending."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.compare_groups("A", "B")
+
+    pvalues = result["pvalue"].values
+    assert all(pvalues[i] <= pvalues[i + 1] for i in range(len(pvalues) - 1))
+
+
+def test_compare_groups_pb_padj_bounds(pb_scores, pb_groups, pb_samples):
+    """All p-values and adjusted p-values must be in [0, 1]."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.compare_groups("A", "B")
+
+    for col in ("pvalue", "padj_bh", "padj_bonf"):
+        assert (result[col] >= 0).all()
+        assert (result[col] <= 1).all()
+
+
+@pytest.mark.parametrize("method", ["ttest", "wilcoxon", "mannwhitneyu"])
+def test_compare_groups_pb_all_methods(pb_scores, pb_groups, pb_samples, method):
+    """All three statistical methods should run without errors."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    result = pb.compare_groups("A", "B", method=method)
+
+    assert len(result) == 3
+    assert not result["pvalue"].isna().any()
+
+
+def test_compare_groups_pb_invalid_method(pb_scores, pb_groups, pb_samples):
+    """An unknown method name should raise ValueError."""
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, pb_samples)
+    with pytest.raises(ValueError, match="Invalid method"):
+        pb.compare_groups("A", "B", method="bad_method")
+
+
+def test_compare_groups_pb_too_few_replicates(pb_scores, pb_groups, pb_samples):
+    """Groups with only one replicate must raise ValueError."""
+    # Remap all group-B cells to a single sample
+    single_rep_samples = pb_samples.copy()
+    single_rep_samples[single_rep_samples == "s4"] = "s3"
+
+    pb = PseudoBulkAnalysis(pb_scores, pb_groups, single_rep_samples)
+    with pytest.raises(ValueError, match="at least 2 biological replicates"):
+        pb.compare_groups("A", "B")
+
+
+# =============================================================================
+# TESTS FOR PseudoBulkAnalysis.compare_multiple_groups()
+# =============================================================================
+
+
+@pytest.fixture
+def pb_three_group_scores():
+    """Reaction scores for a 3-group experiment (6 samples, 5 cells each)."""
+    np.random.seed(1)
+    reactions = ["R1", "R2", "R3"]
+    cells = [f"cell_{i}" for i in range(30)]
+    data = np.random.rand(3, 30)
+    # R1 increases monotonically across groups A < B < C
+    data[0, 0:10] = np.random.rand(10) * 0.5          # group A: low
+    data[0, 10:20] = np.random.rand(10) * 0.5 + 1.5   # group B: mid
+    data[0, 20:30] = np.random.rand(10) * 0.5 + 3.0   # group C: high
+    return pd.DataFrame(data, index=reactions, columns=cells)
+
+
+@pytest.fixture
+def pb_three_group_groups():
+    cells = [f"cell_{i}" for i in range(30)]
+    return pd.Series(["A"] * 10 + ["B"] * 10 + ["C"] * 10, index=cells)
+
+
+@pytest.fixture
+def pb_three_group_samples():
+    cells = [f"cell_{i}" for i in range(30)]
+    labels = (
+        ["s1"] * 5 + ["s2"] * 5     # group A
+        + ["s3"] * 5 + ["s4"] * 5   # group B
+        + ["s5"] * 5 + ["s6"] * 5   # group C
+    )
+    return pd.Series(labels, index=cells)
+
+
+def test_compare_multiple_groups_pb_returns_dataframe(
+    pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+):
+    """compare_multiple_groups() should return a DataFrame with expected columns."""
+    pb = PseudoBulkAnalysis(
+        pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+    )
+    result = pb.compare_multiple_groups()
+
+    assert isinstance(result, pd.DataFrame)
+    for col in ("reaction", "statistic", "pvalue", "n_groups", "padj_bh", "padj_bonf"):
+        assert col in result.columns
+    for g in ("A", "B", "C"):
+        assert f"{g}_mean" in result.columns
+        assert f"{g}_n_samples" in result.columns
+
+
+def test_compare_multiple_groups_pb_detects_signal(
+    pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+):
+    """R1 has a clear gradient across groups and should be the most significant."""
+    pb = PseudoBulkAnalysis(
+        pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+    )
+    result = pb.compare_multiple_groups(method="anova")
+
+    r1_pval = result[result["reaction"] == "R1"]["pvalue"].iloc[0]
+    other_pvals = result[result["reaction"] != "R1"]["pvalue"]
+    assert r1_pval < other_pvals.min()
+
+
+@pytest.mark.parametrize("method", ["anova", "kruskal"])
+def test_compare_multiple_groups_pb_methods(
+    pb_three_group_scores, pb_three_group_groups, pb_three_group_samples, method
+):
+    """Both anova and kruskal methods should run without errors."""
+    pb = PseudoBulkAnalysis(
+        pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+    )
+    result = pb.compare_multiple_groups(method=method)
+
+    assert len(result) == 3
+    assert not result["pvalue"].isna().any()
+
+
+def test_compare_multiple_groups_pb_invalid_method(
+    pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+):
+    pb = PseudoBulkAnalysis(
+        pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+    )
+    with pytest.raises(ValueError, match="Invalid method"):
+        pb.compare_multiple_groups(method="bad")
+
+
+def test_compare_multiple_groups_pb_subset(
+    pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+):
+    """Passing a subset of groups should restrict the comparison."""
+    pb = PseudoBulkAnalysis(
+        pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+    )
+    result = pb.compare_multiple_groups(groups=["A", "C"])
+
+    assert result["n_groups"].iloc[0] == 2
+    assert "A_mean" in result.columns
+    assert "C_mean" in result.columns
+    assert "B_mean" not in result.columns
+
+
+def test_compare_multiple_groups_pb_too_few_groups(
+    pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+):
+    pb = PseudoBulkAnalysis(
+        pb_three_group_scores, pb_three_group_groups, pb_three_group_samples
+    )
+    with pytest.raises(ValueError, match="at least 2 groups"):
+        pb.compare_multiple_groups(groups=["A"])

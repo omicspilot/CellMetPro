@@ -275,7 +275,9 @@ class TestMultiKnockoutEdgeCases:
         from cellmetpro.analysis.perturbation import multi_knockout
 
         # Should not raise — bad gene is logged and skipped
-        fluxes = multi_knockout(simple_model, ["gene1", "no_such_gene"], method="simultaneous")
+        fluxes = multi_knockout(
+            simple_model, ["gene1", "no_such_gene"], method="simultaneous"
+        )
         assert isinstance(fluxes, pd.Series)
 
 

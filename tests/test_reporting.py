@@ -214,6 +214,7 @@ class TestLoadFigureAsBase64:
         assert len(result) > 0
         # Base64 strings contain only valid characters
         import base64
+
         base64.b64decode(result)  # must not raise
 
     def test_returns_none_for_missing_file(self, tmp_path):
@@ -321,11 +322,13 @@ class TestReportGeneratorCoverage:
         )
         scores.to_csv(tmp_path / "reaction_scores.csv")
 
-        diff = pd.DataFrame({
-            "reaction": [f"RXN{i}" for i in range(5)],
-            "log2fc": np.random.randn(5),
-            "padj": np.random.rand(5),
-        })
+        diff = pd.DataFrame(
+            {
+                "reaction": [f"RXN{i}" for i in range(5)],
+                "log2fc": np.random.randn(5),
+                "padj": np.random.rand(5),
+            }
+        )
         diff.to_csv(tmp_path / "differential_A_vs_B.csv", index=False)
 
         generator = ReportGenerator(tmp_path)
@@ -342,11 +345,13 @@ class TestReportGeneratorCoverage:
         )
         scores.to_csv(tmp_path / "reaction_scores.csv")
 
-        diff = pd.DataFrame({
-            "reaction": [f"RXN{i}" for i in range(5)],
-            "log2fc": np.random.randn(5),
-            "pvalue": np.random.rand(5),
-        })
+        diff = pd.DataFrame(
+            {
+                "reaction": [f"RXN{i}" for i in range(5)],
+                "log2fc": np.random.randn(5),
+                "pvalue": np.random.rand(5),
+            }
+        )
         diff.to_csv(tmp_path / "differential_C_vs_D.csv", index=False)
 
         generator = ReportGenerator(tmp_path)
@@ -363,10 +368,12 @@ class TestReportGeneratorCoverage:
         )
         scores.to_csv(tmp_path / "reaction_scores.csv")
 
-        diff = pd.DataFrame({
-            "reaction": [f"RXN{i}" for i in range(5)],
-            "log2fc": np.random.randn(5),
-        })
+        diff = pd.DataFrame(
+            {
+                "reaction": [f"RXN{i}" for i in range(5)],
+                "log2fc": np.random.randn(5),
+            }
+        )
         diff.to_csv(tmp_path / "differential_E_vs_F.csv", index=False)
 
         generator = ReportGenerator(tmp_path)
@@ -383,11 +390,13 @@ class TestReportGeneratorCoverage:
         )
         scores.to_csv(tmp_path / "reaction_scores.csv")
 
-        enrich = pd.DataFrame({
-            "pathway": ["P1", "P2", "P3"],
-            "pvalue": [0.01, 0.05, 0.2],
-            "padj": [0.03, 0.1, 0.4],
-        })
+        enrich = pd.DataFrame(
+            {
+                "pathway": ["P1", "P2", "P3"],
+                "pvalue": [0.01, 0.05, 0.2],
+                "padj": [0.03, 0.1, 0.4],
+            }
+        )
         enrich.to_csv(tmp_path / "subsystem_enrichment.csv", index=False)
 
         generator = ReportGenerator(tmp_path)
@@ -404,10 +413,12 @@ class TestReportGeneratorCoverage:
         )
         scores.to_csv(tmp_path / "reaction_scores.csv")
 
-        enrich = pd.DataFrame({
-            "pathway": ["P1", "P2"],
-            "pvalue": [0.01, 0.05],
-        })
+        enrich = pd.DataFrame(
+            {
+                "pathway": ["P1", "P2"],
+                "pvalue": [0.01, 0.05],
+            }
+        )
         enrich.to_csv(tmp_path / "go_enrichment.csv", index=False)
 
         generator = ReportGenerator(tmp_path)
@@ -424,10 +435,12 @@ class TestReportGeneratorCoverage:
         )
         scores.to_csv(tmp_path / "reaction_scores.csv")
 
-        enrich = pd.DataFrame({
-            "pathway": ["P1", "P2"],
-            "score": [0.8, 0.6],
-        })
+        enrich = pd.DataFrame(
+            {
+                "pathway": ["P1", "P2"],
+                "score": [0.8, 0.6],
+            }
+        )
         enrich.to_csv(tmp_path / "kegg_enrichment.csv", index=False)
 
         generator = ReportGenerator(tmp_path)
@@ -444,10 +457,12 @@ class TestReportGeneratorCoverage:
         )
         scores.to_csv(tmp_path / "reaction_scores.csv")
 
-        clusters = pd.DataFrame({
-            "cell": [f"cell{i}" for i in range(10)],
-            "cluster": [0, 0, 1, 1, 1, 2, 2, 2, 2, 0],
-        })
+        clusters = pd.DataFrame(
+            {
+                "cell": [f"cell{i}" for i in range(10)],
+                "cluster": [0, 0, 1, 1, 1, 2, 2, 2, 2, 0],
+            }
+        )
         clusters.to_csv(tmp_path / "clustering_results.csv", index=False)
 
         generator = ReportGenerator(tmp_path)

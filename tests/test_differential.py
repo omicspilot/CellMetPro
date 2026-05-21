@@ -1000,9 +1000,7 @@ def pb_groups():
 def pb_samples():
     """Sample labels: s1/s2 in group A (5 cells each), s3/s4 in group B."""
     cells = [f"cell_{i}" for i in range(20)]
-    return pd.Series(
-        ["s1"] * 5 + ["s2"] * 5 + ["s3"] * 5 + ["s4"] * 5, index=cells
-    )
+    return pd.Series(["s1"] * 5 + ["s2"] * 5 + ["s3"] * 5 + ["s4"] * 5, index=cells)
 
 
 # =============================================================================
@@ -1106,7 +1104,9 @@ def test_compare_groups_pb_log2fc_direction(pb_scores, pb_groups, pb_samples):
     result = pb.compare_groups("A", "B")
 
     r1_row = result[result["reaction"] == "R1"].iloc[0]
-    assert r1_row["log2fc"] > 0, f"Expected positive log2fc for R1, got {r1_row['log2fc']}"
+    assert (
+        r1_row["log2fc"] > 0
+    ), f"Expected positive log2fc for R1, got {r1_row['log2fc']}"
 
 
 def test_compare_groups_pb_detects_signal(pb_scores, pb_groups, pb_samples):
@@ -1179,9 +1179,9 @@ def pb_three_group_scores():
     cells = [f"cell_{i}" for i in range(30)]
     data = np.random.rand(3, 30)
     # R1 increases monotonically across groups A < B < C
-    data[0, 0:10] = np.random.rand(10) * 0.5          # group A: low
-    data[0, 10:20] = np.random.rand(10) * 0.5 + 1.5   # group B: mid
-    data[0, 20:30] = np.random.rand(10) * 0.5 + 3.0   # group C: high
+    data[0, 0:10] = np.random.rand(10) * 0.5  # group A: low
+    data[0, 10:20] = np.random.rand(10) * 0.5 + 1.5  # group B: mid
+    data[0, 20:30] = np.random.rand(10) * 0.5 + 3.0  # group C: high
     return pd.DataFrame(data, index=reactions, columns=cells)
 
 
@@ -1195,9 +1195,12 @@ def pb_three_group_groups():
 def pb_three_group_samples():
     cells = [f"cell_{i}" for i in range(30)]
     labels = (
-        ["s1"] * 5 + ["s2"] * 5     # group A
-        + ["s3"] * 5 + ["s4"] * 5   # group B
-        + ["s5"] * 5 + ["s6"] * 5   # group C
+        ["s1"] * 5
+        + ["s2"] * 5  # group A
+        + ["s3"] * 5
+        + ["s4"] * 5  # group B
+        + ["s5"] * 5
+        + ["s6"] * 5  # group C
     )
     return pd.Series(labels, index=cells)
 

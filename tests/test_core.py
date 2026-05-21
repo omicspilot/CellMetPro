@@ -1773,7 +1773,7 @@ class TestCacheEdgeCases:
 # ============================================================================
 
 
-class TestPreprocessingEdgeCases:
+class TestPreprocessingCoverage:
     """Additional coverage for preprocessing edge cases."""
 
     def _make_adata(self, n_cells: int = 10, n_genes: int = 5):
@@ -1850,14 +1850,16 @@ class TestPreprocessingEdgeCases:
         from cellmetpro.core.preprocessing import DataLoader
 
         # Write a 3-genes x 4-cells matrix (DataLoader will transpose to 4 x 3)
-        matrix = csr_matrix(np.array([[1, 2, 0, 1], [0, 0, 3, 1], [2, 1, 0, 0]], dtype=float))
+        matrix = csr_matrix(
+            np.array([[1, 2, 0, 1], [0, 0, 3, 1], [2, 1, 0, 0]], dtype=float)
+        )
         mtx_path = tmp_path / "matrix.mtx"
         mmwrite(str(mtx_path), matrix)
 
         loader = DataLoader(mtx_path)
         adata = loader.load()
 
-        assert adata.n_obs == 4   # cells
+        assert adata.n_obs == 4  # cells
         assert adata.n_vars == 3  # genes
         assert adata.obs_names[0].startswith("cell_")
         assert adata.var_names[0].startswith("gene_")
@@ -1870,7 +1872,9 @@ class TestPreprocessingEdgeCases:
 
         from cellmetpro.core.preprocessing import DataLoader
 
-        matrix = csr_matrix(np.array([[1, 2, 3], [4, 5, 6]], dtype=float))  # 2 genes x 3 cells
+        matrix = csr_matrix(
+            np.array([[1, 2, 3], [4, 5, 6]], dtype=float)
+        )  # 2 genes x 3 cells
         mmwrite(str(tmp_path / "matrix.mtx"), matrix)
 
         # genes.tsv: 2-column format (ID, name)
@@ -1898,7 +1902,9 @@ class TestPreprocessingEdgeCases:
 
         from cellmetpro.core.preprocessing import DataLoader
 
-        matrix = csr_matrix(np.array([[1, 2], [3, 4]], dtype=float))  # 2 genes x 2 cells
+        matrix = csr_matrix(
+            np.array([[1, 2], [3, 4]], dtype=float)
+        )  # 2 genes x 2 cells
         mmwrite(str(tmp_path / "matrix.mtx"), matrix)
 
         pd.DataFrame(["GENE_A", "GENE_B"]).to_csv(
@@ -1930,11 +1936,16 @@ class TestPreprocessingEdgeCases:
 
         from cellmetpro.core.preprocessing import filter_cells
 
-        X = csr_matrix(np.array([
-            [1, 1, 0, 0],  # 2 genes expressed
-            [1, 1, 1, 0],  # 3 genes expressed
-            [0, 0, 0, 0],  # 0 genes expressed
-        ], dtype=float))
+        X = csr_matrix(
+            np.array(
+                [
+                    [1, 1, 0, 0],  # 2 genes expressed
+                    [1, 1, 1, 0],  # 3 genes expressed
+                    [0, 0, 0, 0],  # 0 genes expressed
+                ],
+                dtype=float,
+            )
+        )
         adata = ad.AnnData(X)
 
         filtered = filter_cells(adata, min_genes=1)
@@ -1959,10 +1970,15 @@ class TestPreprocessingEdgeCases:
 
         from cellmetpro.core.preprocessing import filter_genes
 
-        X = csr_matrix(np.array([
-            [1, 0, 1],  # gene0 and gene2 expressed in cell0
-            [1, 0, 0],  # only gene0 expressed in cell1
-        ], dtype=float))
+        X = csr_matrix(
+            np.array(
+                [
+                    [1, 0, 1],  # gene0 and gene2 expressed in cell0
+                    [1, 0, 0],  # only gene0 expressed in cell1
+                ],
+                dtype=float,
+            )
+        )
         adata = ad.AnnData(X)
 
         filtered = filter_genes(adata, min_cells=2)

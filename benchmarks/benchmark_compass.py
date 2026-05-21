@@ -69,9 +69,7 @@ def create_test_model(n_reactions: int = 50) -> cobra.Model:
     return model
 
 
-def create_expression_data(
-    n_genes: int, n_cells: int, seed: int = 42
-) -> pd.DataFrame:
+def create_expression_data(n_genes: int, n_cells: int, seed: int = 42) -> pd.DataFrame:
     """Create synthetic expression data."""
     np.random.seed(seed)
     genes = [f"GENE{i}" for i in range(n_genes)]

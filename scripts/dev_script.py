@@ -53,8 +53,8 @@ for rxn in model.reactions:
 
 print(f"\nFound {len(subsystem_counts)} unique subsystems:\n")
 for subsystem, count in sorted(subsystem_counts.items(), key=lambda x: -x[1]):
-  if rxn.subsystem is not None or rxn.subsystem != "":
-    print(f"  {subsystem:40s} : {count} reactions")
+    if rxn.subsystem is not None or rxn.subsystem != "":
+        print(f"  {subsystem:40s} : {count} reactions")
 
 # # ============================================================================
 # # Show expected output format

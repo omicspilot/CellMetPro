@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 import anndata as ad
 import numpy as np
@@ -16,7 +15,6 @@ from cellmetpro.io import (
     store_pathway_result,
     store_pseudotime,
 )
-
 
 # ---------------------------------------------------------------------------
 # Minimal stubs so tests don't need to import the full COMPASS engine
@@ -38,8 +36,8 @@ class _StubCompassResult:
     reaction_scores: pd.DataFrame
     reaction_penalties: pd.DataFrame
     config: _StubConfig = field(default_factory=_StubConfig)
-    uptake_scores: Optional[pd.DataFrame] = None
-    secretion_scores: Optional[pd.DataFrame] = None
+    uptake_scores: pd.DataFrame | None = None
+    secretion_scores: pd.DataFrame | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -62,15 +60,23 @@ def adata(cells):
     """Minimal AnnData: 10 cells × 4 genes."""
     rng = np.random.default_rng(42)
     X = rng.random((len(cells), 4))
-    return ad.AnnData(X, obs=pd.DataFrame(index=cells), var=pd.DataFrame(index=["G1", "G2", "G3", "G4"]))
+    return ad.AnnData(
+        X,
+        obs=pd.DataFrame(index=cells),
+        var=pd.DataFrame(index=["G1", "G2", "G3", "G4"]),
+    )
 
 
 @pytest.fixture
 def compass_result(cells, reactions):
     """Stub CompassResult with 5 reactions × 10 cells."""
     rng = np.random.default_rng(0)
-    scores = pd.DataFrame(rng.random((len(reactions), len(cells))), index=reactions, columns=cells)
-    penalties = pd.DataFrame(rng.random((len(reactions), len(cells))), index=reactions, columns=cells)
+    scores = pd.DataFrame(
+        rng.random((len(reactions), len(cells))), index=reactions, columns=cells
+    )
+    penalties = pd.DataFrame(
+        rng.random((len(reactions), len(cells))), index=reactions, columns=cells
+    )
     return _StubCompassResult(reaction_scores=scores, reaction_penalties=penalties)
 
 
@@ -146,7 +152,9 @@ def test_store_compass_result_no_overlap_raises(adata, reactions):
     """Raise ValueError when no cells are shared."""
     bad_cells = ["cell_x", "cell_y"]
     rng = np.random.default_rng(0)
-    scores = pd.DataFrame(rng.random((len(reactions), 2)), index=reactions, columns=bad_cells)
+    scores = pd.DataFrame(
+        rng.random((len(reactions), 2)), index=reactions, columns=bad_cells
+    )
     penalties = scores.copy()
     result = _StubCompassResult(reaction_scores=scores, reaction_penalties=penalties)
 
@@ -159,7 +167,9 @@ def test_store_compass_result_partial_overlap(cells, reactions):
     # adata has cells 0-9; result only covers cells 0-4
     rng = np.random.default_rng(1)
     subset = cells[:5]
-    scores = pd.DataFrame(rng.random((len(reactions), 5)), index=reactions, columns=subset)
+    scores = pd.DataFrame(
+        rng.random((len(reactions), 5)), index=reactions, columns=subset
+    )
     penalties = scores.copy()
     result = _StubCompassResult(reaction_scores=scores, reaction_penalties=penalties)
 
@@ -178,10 +188,14 @@ def test_store_compass_result_with_exchange_scores(adata, cells, reactions):
     """uptake and secretion scores are stored when present."""
     rng = np.random.default_rng(2)
     metabolites = ["M1", "M2"]
-    scores = pd.DataFrame(rng.random((len(reactions), len(cells))), index=reactions, columns=cells)
+    scores = pd.DataFrame(
+        rng.random((len(reactions), len(cells))), index=reactions, columns=cells
+    )
     penalties = scores.copy()
     uptake = pd.DataFrame(rng.random((2, len(cells))), index=metabolites, columns=cells)
-    secretion = pd.DataFrame(rng.random((2, len(cells))), index=metabolites, columns=cells)
+    secretion = pd.DataFrame(
+        rng.random((2, len(cells))), index=metabolites, columns=cells
+    )
 
     result = _StubCompassResult(
         reaction_scores=scores,
@@ -374,7 +388,9 @@ def test_store_pseudotime_returns_adata(adata, pseudotime):
 # ---------------------------------------------------------------------------
 
 
-def test_chaining_all_store_functions(adata, compass_result, diff_result, pathway_result, pseudotime):
+def test_chaining_all_store_functions(
+    adata, compass_result, diff_result, pathway_result, pseudotime
+):
     """All four store functions can be called on the same adata."""
     store_compass_result(adata, compass_result)
     store_differential_result(adata, diff_result, "A_vs_B")

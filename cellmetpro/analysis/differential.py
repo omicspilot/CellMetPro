@@ -821,6 +821,7 @@ class PseudoBulkAnalysis:
 
         pseudobulk = self.aggregate(method=aggregate_method)
         sample_groups = self._sample_groups  # set by aggregate()
+        assert sample_groups is not None
 
         samples1 = sample_groups[sample_groups == group1].index
         samples2 = sample_groups[sample_groups == group2].index
@@ -912,6 +913,7 @@ class PseudoBulkAnalysis:
 
         pseudobulk = self.aggregate(method=aggregate_method)
         sample_groups = self._sample_groups
+        assert sample_groups is not None
 
         if groups is None:
             groups = sorted(sample_groups.unique())

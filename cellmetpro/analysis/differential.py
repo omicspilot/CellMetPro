@@ -687,3 +687,281 @@ class DifferentialAnalysis:
                 all_results.append(result)
 
         return pd.concat(all_results, ignore_index=True)
+
+
+class PseudoBulkAnalysis:
+    """Compare metabolic activity between groups using biological replicates.
+
+    Aggregates reaction scores within each (sample, group) combination before
+    running statistics, treating each biological replicate as an independent
+    observation. This is the statistically correct approach when cells come
+    from multiple donors, animals, or experimental batches — it avoids the
+    pseudoreplication problem of treating cells as independent when they share
+    a common source.
+
+    Parameters
+    ----------
+    reaction_scores : pd.DataFrame
+        Reaction activity scores (reactions x cells).
+    groups : pd.Series
+        Condition label for each cell (e.g. ``"control"``, ``"treatment"``).
+    samples : pd.Series
+        Biological replicate label for each cell (e.g. ``"donor1"``).
+        Each sample must belong to exactly one group.
+
+    Examples
+    --------
+    >>> pb = PseudoBulkAnalysis(reaction_scores, cell_groups, cell_samples)
+    >>> result = pb.compare_groups("control", "treatment")
+    >>> significant = result[result["padj_bh"] < 0.05]
+    """
+
+    def __init__(
+        self,
+        reaction_scores: pd.DataFrame,
+        groups: pd.Series,
+        samples: pd.Series,
+    ) -> None:
+        self.reaction_scores = reaction_scores
+        self.groups = groups
+        self.samples = samples
+        self._pseudobulk: pd.DataFrame | None = None
+        self._sample_groups: pd.Series | None = None
+
+    def aggregate(
+        self,
+        method: Literal["mean", "sum"] = "mean",
+    ) -> pd.DataFrame:
+        """Aggregate cell-level scores to sample-level pseudo-bulk profiles.
+
+        Parameters
+        ----------
+        method : str
+            Aggregation function: ``"mean"`` (default) or ``"sum"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            Pseudo-bulk scores (reactions x samples).
+
+        Raises
+        ------
+        ValueError
+            If any sample has cells assigned to more than one group.
+        """
+        common_cells = self.reaction_scores.columns.intersection(
+            self.groups.index.intersection(self.samples.index)
+        )
+        scores = self.reaction_scores[common_cells]
+        group_labels = self.groups[common_cells]
+        sample_labels = self.samples[common_cells]
+
+        # Verify each sample belongs to exactly one group
+        sample_group_map: dict[str, str] = {}
+        for cell in common_cells:
+            s = sample_labels[cell]
+            g = group_labels[cell]
+            if s in sample_group_map and sample_group_map[s] != g:
+                raise ValueError(
+                    f"Sample '{s}' has cells in multiple groups "
+                    f"({sample_group_map[s]!r} and {g!r}). "
+                    "Each sample must belong to exactly one group."
+                )
+            sample_group_map[s] = g
+
+        agg_func = np.mean if method == "mean" else np.sum
+        pseudobulk = {
+            sample: scores.loc[:, sample_labels[sample_labels == sample].index].apply(
+                agg_func, axis=1
+            )
+            for sample in sample_labels.unique()
+        }
+
+        self._pseudobulk = pd.DataFrame(pseudobulk)
+        self._sample_groups = pd.Series(sample_group_map)
+        return self._pseudobulk
+
+    def compare_groups(
+        self,
+        group1: str,
+        group2: str,
+        aggregate_method: Literal["mean", "sum"] = "mean",
+        method: Literal["ttest", "wilcoxon", "mannwhitneyu"] = "ttest",
+    ) -> pd.DataFrame:
+        """Compare two groups using sample-level pseudo-bulk profiles.
+
+        Parameters
+        ----------
+        group1 : str
+            Name of the first group.
+        group2 : str
+            Name of the second group.
+        aggregate_method : str
+            How to aggregate cells within each sample.
+        method : str
+            Statistical test applied to the sample-level data.
+
+        Returns
+        -------
+        pd.DataFrame
+            Results with columns: reaction, group1_mean, group2_mean, log2fc,
+            statistic, pvalue, padj_bh, padj_bonf, group1_n_samples,
+            group2_n_samples.
+
+        Raises
+        ------
+        ValueError
+            If either group has fewer than 2 biological replicates.
+        """
+        valid_methods = {"ttest", "wilcoxon", "mannwhitneyu"}
+        if method not in valid_methods:
+            raise ValueError(
+                f"Invalid method '{method}'. Must be one of: {valid_methods}"
+            )
+
+        pseudobulk = self.aggregate(method=aggregate_method)
+        sample_groups = self._sample_groups  # set by aggregate()
+        assert sample_groups is not None
+
+        samples1 = sample_groups[sample_groups == group1].index
+        samples2 = sample_groups[sample_groups == group2].index
+
+        if len(samples1) < 2:
+            raise ValueError(
+                f"Group '{group1}' has {len(samples1)} sample(s). "
+                "Need at least 2 biological replicates for pseudo-bulk analysis."
+            )
+        if len(samples2) < 2:
+            raise ValueError(
+                f"Group '{group2}' has {len(samples2)} sample(s). "
+                "Need at least 2 biological replicates for pseudo-bulk analysis."
+            )
+
+        results = []
+        for reaction_id in pseudobulk.index:
+            vals1 = pseudobulk.loc[reaction_id, samples1].values
+            vals2 = pseudobulk.loc[reaction_id, samples2].values
+
+            mean1 = np.mean(vals1)
+            mean2 = np.mean(vals2)
+            epsilon = 1e-9
+            log2fc = np.log2((mean2 + epsilon) / (mean1 + epsilon))
+
+            if method == "ttest":
+                stat, pval = stats.ttest_ind(vals1, vals2)
+            elif method == "wilcoxon":
+                stat, pval = stats.ranksums(vals1, vals2)
+            else:  # mannwhitneyu
+                stat, pval = stats.mannwhitneyu(vals1, vals2, alternative="two-sided")
+
+            results.append(
+                {
+                    "reaction": reaction_id,
+                    "group1_mean": mean1,
+                    "group2_mean": mean2,
+                    "log2fc": log2fc,
+                    "statistic": stat,
+                    "pvalue": pval,
+                    "group1_n_samples": len(samples1),
+                    "group2_n_samples": len(samples2),
+                }
+            )
+
+        results_df = pd.DataFrame(results)
+        _, padj_bh, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")
+        _, padj_bonf, _, _ = multipletests(results_df["pvalue"], method="bonferroni")
+        results_df["padj_bh"] = padj_bh
+        results_df["padj_bonf"] = padj_bonf
+
+        return results_df.sort_values("pvalue")
+
+    def compare_multiple_groups(
+        self,
+        groups: list[str] | None = None,
+        aggregate_method: Literal["mean", "sum"] = "mean",
+        method: Literal["anova", "kruskal"] = "anova",
+    ) -> pd.DataFrame:
+        """Compare metabolic activity across multiple groups.
+
+        Parameters
+        ----------
+        groups : list[str], optional
+            Groups to compare. If ``None``, uses all unique groups.
+        aggregate_method : str
+            How to aggregate cells within each sample.
+        method : str
+            Statistical test: ``"anova"`` (parametric) or ``"kruskal"``
+            (non-parametric Kruskal-Wallis).
+
+        Returns
+        -------
+        pd.DataFrame
+            Results with per-group means and sample counts, statistic,
+            pvalue, padj_bh, padj_bonf.
+
+        Raises
+        ------
+        ValueError
+            If any group has fewer than 2 biological replicates, or if
+            fewer than 2 groups are available.
+        """
+        valid_methods = {"anova", "kruskal"}
+        if method not in valid_methods:
+            raise ValueError(
+                f"Invalid method '{method}'. Must be one of: {valid_methods}"
+            )
+
+        pseudobulk = self.aggregate(method=aggregate_method)
+        sample_groups = self._sample_groups
+        assert sample_groups is not None
+
+        if groups is None:
+            groups = sorted(sample_groups.unique())
+        else:
+            groups = [g for g in groups if g in sample_groups.unique()]
+
+        if len(groups) < 2:
+            raise ValueError("Need at least 2 groups for comparison.")
+
+        group_samples = {g: sample_groups[sample_groups == g].index for g in groups}
+
+        for g, samps in group_samples.items():
+            if len(samps) < 2:
+                raise ValueError(
+                    f"Group '{g}' has {len(samps)} sample(s). "
+                    "Need at least 2 biological replicates."
+                )
+
+        results = []
+        for reaction_id in pseudobulk.index:
+            group_vals = [
+                pseudobulk.loc[reaction_id, samps].values
+                for samps in group_samples.values()
+            ]
+
+            if method == "anova":
+                stat, pval = stats.f_oneway(*group_vals)
+            else:
+                stat, pval = stats.kruskal(*group_vals)
+
+            row: dict = {
+                "reaction": reaction_id,
+                "statistic": stat,
+                "pvalue": pval,
+                "n_groups": len(groups),
+            }
+            for g, samps in group_samples.items():
+                g_vals = pseudobulk.loc[reaction_id, samps]
+                row[f"{g}_mean"] = np.mean(g_vals)
+                row[f"{g}_std"] = np.std(g_vals)
+                row[f"{g}_n_samples"] = len(samps)
+
+            results.append(row)
+
+        results_df = pd.DataFrame(results)
+        _, padj_bh, _, _ = multipletests(results_df["pvalue"], method="fdr_bh")
+        _, padj_bonf, _, _ = multipletests(results_df["pvalue"], method="bonferroni")
+        results_df["padj_bh"] = padj_bh
+        results_df["padj_bonf"] = padj_bonf
+
+        return results_df.sort_values("pvalue")

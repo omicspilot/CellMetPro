@@ -1262,3 +1262,843 @@ class TestPlotPathwayHeatmap:
         plot_pathway_heatmap(pathway_scores, groups_20, n_top=5, save=str(save_path))
         assert save_path.exists()
         plt.close()
+
+
+# =============================================================================
+# EDGE CASE TESTS FOR VIOLIN / BOXPLOT / STRIP PLOT
+# =============================================================================
+
+
+class TestViolinEdgeCases:
+    """Targeted tests to cover uncovered branches in violin.py."""
+
+    def test_violin_with_title_xlabel_ylabel(self, reaction_scores, groups):
+        """title, xlabel, ylabel args exercise the label-setting paths."""
+        from cellmetpro.visualization import plot_reaction_violin
+
+        fig = plot_reaction_violin(
+            reaction_scores,
+            groups,
+            n_top=3,
+            title="My Violin",
+            xlabel="Rxn",
+            ylabel="Activity",
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_violin_explicit_figsize(self, reaction_scores, groups):
+        """Explicit figsize skips the auto-size branch."""
+        from cellmetpro.visualization import plot_reaction_violin
+
+        fig = plot_reaction_violin(reaction_scores, groups, n_top=3, figsize=(12, 5))
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_violin_explicit_palette(self, reaction_scores, groups):
+        """Explicit palette skips the default-palette branch."""
+        from cellmetpro.visualization import plot_reaction_violin
+
+        fig = plot_reaction_violin(reaction_scores, groups, n_top=3, palette="Blues")
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_violin_many_reactions_rotates_labels(self, reaction_scores, groups):
+        """n_top > 5 in vertical orientation triggers label rotation."""
+        from cellmetpro.visualization import plot_reaction_violin
+
+        fig = plot_reaction_violin(reaction_scores, groups, n_top=10, orient="v")
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_violin_no_valid_reactions_raises(self, reaction_scores, groups):
+        """Empty reactions list raises ValueError."""
+        from cellmetpro.visualization import plot_reaction_violin
+
+        with pytest.raises(ValueError, match="No valid reactions"):
+            plot_reaction_violin(reaction_scores, groups, reactions=["nonexistent_rxn"])
+        plt.close("all")
+
+    def test_violin_no_common_cells_raises(self, reaction_scores):
+        """No common cells between scores and groups raises ValueError."""
+        from cellmetpro.visualization import plot_reaction_violin
+
+        disjoint_groups = pd.Series(["A", "B"], index=["fake_cell_1", "fake_cell_2"])
+        with pytest.raises(ValueError, match="No common cells"):
+            plot_reaction_violin(reaction_scores, disjoint_groups, n_top=3)
+        plt.close("all")
+
+    def test_boxplot_explicit_reactions(self, reaction_scores, groups):
+        """Explicit reactions list covers the reactions-is-not-None branch."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        fig = plot_reaction_boxplot(
+            reaction_scores, groups, reactions=["R0", "R1", "R2"]
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_boxplot_horizontal(self, reaction_scores, groups):
+        """orient='h' covers the horizontal boxplot code path."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        fig = plot_reaction_boxplot(reaction_scores, groups, n_top=3, orient="h")
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_boxplot_with_title_labels(self, reaction_scores, groups):
+        """title, xlabel, ylabel cover label-setting lines."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        fig = plot_reaction_boxplot(
+            reaction_scores,
+            groups,
+            n_top=3,
+            title="My Box",
+            xlabel="Rxn",
+            ylabel="Score",
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_boxplot_horizontal_labels(self, reaction_scores, groups):
+        """Horizontal orient exercises the horizontal-label code paths."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        fig = plot_reaction_boxplot(
+            reaction_scores,
+            groups,
+            n_top=3,
+            orient="h",
+            xlabel="Score",
+            ylabel="Reaction",
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_boxplot_no_valid_reactions_raises(self, reaction_scores, groups):
+        """No valid reactions raises ValueError."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        with pytest.raises(ValueError, match="No valid reactions"):
+            plot_reaction_boxplot(reaction_scores, groups, reactions=["nonexistent"])
+        plt.close("all")
+
+    def test_boxplot_no_common_cells_raises(self, reaction_scores):
+        """No common cells raises ValueError."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        disjoint = pd.Series(["A"], index=["fake_cell"])
+        with pytest.raises(ValueError, match="No common cells"):
+            plot_reaction_boxplot(reaction_scores, disjoint, n_top=3)
+        plt.close("all")
+
+    def test_boxplot_many_reactions_rotates_labels(self, reaction_scores, groups):
+        """n_top=10 with vertical orient triggers x-label rotation."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        fig = plot_reaction_boxplot(reaction_scores, groups, n_top=10, orient="v")
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_boxplot_save(self, reaction_scores, groups, tmp_path):
+        """save argument writes the figure to disk."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        save_path = tmp_path / "boxplot.png"
+        plot_reaction_boxplot(reaction_scores, groups, n_top=3, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+    def test_boxplot_explicit_figsize(self, reaction_scores, groups):
+        """Explicit figsize skips the auto-size branch in boxplot."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        fig = plot_reaction_boxplot(reaction_scores, groups, n_top=3, figsize=(10, 8))
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_boxplot_explicit_palette(self, reaction_scores, groups):
+        """Explicit palette skips the default-palette branch in boxplot."""
+        from cellmetpro.visualization import plot_reaction_boxplot
+
+        fig = plot_reaction_boxplot(reaction_scores, groups, n_top=3, palette="Pastel1")
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_single_violin_invalid_reaction_raises(self, reaction_scores, groups):
+        """Reaction not in data raises ValueError."""
+        from cellmetpro.visualization import plot_single_reaction_violin
+
+        with pytest.raises(ValueError, match="not found"):
+            plot_single_reaction_violin(reaction_scores, groups, "no_such_reaction")
+        plt.close("all")
+
+    def test_single_violin_save(self, reaction_scores, groups, tmp_path):
+        """save argument writes single violin to disk."""
+        from cellmetpro.visualization import plot_single_reaction_violin
+
+        save_path = tmp_path / "single_violin.png"
+        plot_single_reaction_violin(reaction_scores, groups, "R0", save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+    def test_strip_with_title(self, reaction_scores, groups):
+        """title arg covers the title-setting line in strip plot."""
+        from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+        fig = plot_multi_reaction_stripplot(
+            reaction_scores,
+            groups,
+            reactions=["R0", "R1", "R2"],
+            title="Strip Title",
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_strip_many_reactions_rotation(self, reaction_scores, groups):
+        """More than 5 reactions triggers label rotation in strip plot."""
+        from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+        fig = plot_multi_reaction_stripplot(
+            reaction_scores,
+            groups,
+            reactions=[f"R{i}" for i in range(8)],
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_strip_save(self, reaction_scores, groups, tmp_path):
+        """save argument writes strip plot to disk."""
+        from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+        save_path = tmp_path / "strip.png"
+        plot_multi_reaction_stripplot(
+            reaction_scores,
+            groups,
+            reactions=["R0", "R1"],
+            save=str(save_path),
+        )
+        assert save_path.exists()
+        plt.close()
+
+    def test_strip_no_valid_reactions_raises(self, reaction_scores, groups):
+        """No valid reactions raises ValueError in strip plot."""
+        from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+        with pytest.raises(ValueError, match="No valid reactions"):
+            plot_multi_reaction_stripplot(reaction_scores, groups, reactions=["ghost"])
+        plt.close("all")
+
+    def test_strip_no_common_cells_raises(self, reaction_scores):
+        """No common cells raises ValueError in strip plot."""
+        from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+        disjoint = pd.Series(["A"], index=["fake_cell"])
+        with pytest.raises(ValueError, match="No common cells"):
+            plot_multi_reaction_stripplot(reaction_scores, disjoint, reactions=["R0"])
+        plt.close("all")
+
+    def test_strip_explicit_figsize(self, reaction_scores, groups):
+        """Explicit figsize skips auto-size in strip plot."""
+        from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+        fig = plot_multi_reaction_stripplot(
+            reaction_scores,
+            groups,
+            reactions=["R0", "R1"],
+            figsize=(12, 5),
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_strip_explicit_palette(self, reaction_scores, groups):
+        """Explicit palette skips default-palette in strip plot."""
+        from cellmetpro.visualization import plot_multi_reaction_stripplot
+
+        fig = plot_multi_reaction_stripplot(
+            reaction_scores,
+            groups,
+            reactions=["R0", "R1"],
+            palette="Set1",
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+
+# =============================================================================
+# EDGE CASE TESTS FOR ADVANCED VISUALIZATION
+# =============================================================================
+
+
+class TestAdvancedVisualizationEdgeCases:
+    """Edge cases for advanced.py functions."""
+
+    @pytest.fixture
+    def subsystem_mapping(self, reaction_scores):
+        return {
+            "Glycolysis": list(reaction_scores.index[:5]),
+            "TCA": list(reaction_scores.index[5:10]),
+        }
+
+    def test_stacked_bar_legend_bottom(
+        self, reaction_scores, groups, subsystem_mapping
+    ):
+        """legend_loc='bottom' exercises the bottom-legend code path."""
+        from cellmetpro.visualization import plot_stacked_bar
+
+        ax = plot_stacked_bar(
+            reaction_scores, groups, subsystem_mapping, legend_loc="bottom"
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_stacked_bar_legend_none(self, reaction_scores, groups, subsystem_mapping):
+        """legend_loc='none' removes the legend."""
+        from cellmetpro.visualization import plot_stacked_bar
+
+        ax = plot_stacked_bar(
+            reaction_scores, groups, subsystem_mapping, legend_loc="none"
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_stacked_bar_string_palette(
+        self, reaction_scores, groups, subsystem_mapping
+    ):
+        """String palette exercises the isinstance(palette, str) branch."""
+        from cellmetpro.visualization import plot_stacked_bar
+
+        ax = plot_stacked_bar(
+            reaction_scores, groups, subsystem_mapping, palette="Set2"
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_stacked_bar_list_palette(self, reaction_scores, groups, subsystem_mapping):
+        """List palette exercises the else branch of palette handling."""
+        from cellmetpro.visualization import plot_stacked_bar
+
+        ax = plot_stacked_bar(
+            reaction_scores,
+            groups,
+            subsystem_mapping,
+            palette=["#ff0000", "#00ff00"],
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_stacked_bar_ylabel(self, reaction_scores, groups, subsystem_mapping):
+        """Explicit ylabel covers the ylabel-is-truthy branch."""
+        from cellmetpro.visualization import plot_stacked_bar
+
+        ax = plot_stacked_bar(
+            reaction_scores, groups, subsystem_mapping, ylabel="Mean Activity"
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_stacked_bar_no_common_cells_raises(
+        self, reaction_scores, subsystem_mapping
+    ):
+        """No common cells raises ValueError in stacked bar."""
+        from cellmetpro.visualization import plot_stacked_bar
+
+        disjoint = pd.Series(["A"], index=["fake_cell"])
+        with pytest.raises(ValueError, match="No common cells"):
+            plot_stacked_bar(reaction_scores, disjoint, subsystem_mapping)
+        plt.close("all")
+
+    def test_stacked_bar_no_valid_subsystems_raises(self, reaction_scores, groups):
+        """All reactions missing from subsystem_mapping raises ValueError."""
+        from cellmetpro.visualization import plot_stacked_bar
+
+        bad_mapping = {"Glycolysis": ["ghost_rxn_1", "ghost_rxn_2"]}
+        with pytest.raises(ValueError, match="No subsystems"):
+            plot_stacked_bar(reaction_scores, groups, bad_mapping)
+        plt.close("all")
+
+    def test_ridge_no_valid_reactions_raises(self, reaction_scores, groups):
+        """No valid reactions raises ValueError in ridge plot."""
+        from cellmetpro.visualization import plot_ridge
+
+        with pytest.raises(ValueError, match="No valid reactions"):
+            plot_ridge(reaction_scores, groups, reactions=["ghost"])
+        plt.close("all")
+
+    def test_ridge_no_common_cells_raises(self, reaction_scores):
+        """No common cells raises ValueError in ridge plot."""
+        from cellmetpro.visualization import plot_ridge
+
+        disjoint = pd.Series(["A"], index=["fake_cell"])
+        with pytest.raises(ValueError, match="No common cells"):
+            plot_ridge(reaction_scores, disjoint, n_top=3)
+        plt.close("all")
+
+    def test_radar_no_common_cells_raises(self, reaction_scores):
+        """No common cells raises ValueError in radar chart."""
+        from cellmetpro.visualization import plot_radar
+
+        disjoint = pd.Series(["A", "B", "C"], index=["f1", "f2", "f3"])
+        with pytest.raises(ValueError, match="No common cells"):
+            plot_radar(reaction_scores, disjoint, n_top=5)
+        plt.close("all")
+
+    def test_radar_string_palette(self, reaction_scores, groups):
+        """String palette exercises the isinstance(palette, str) branch in radar."""
+        from cellmetpro.visualization import plot_radar
+
+        ax = plot_radar(reaction_scores, groups, n_top=5, palette="husl")
+        assert ax is not None
+        plt.close()
+
+    def test_radar_list_palette(self, reaction_scores, groups):
+        """List palette exercises the else branch of palette in radar."""
+        from cellmetpro.visualization import plot_radar
+
+        ax = plot_radar(
+            reaction_scores,
+            groups,
+            n_top=5,
+            palette=["#ff0000", "#00ff00", "#0000ff"],
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_waterfall_no_pvalue_col(self, differential_results):
+        """Waterfall without pvalue_col in data covers the no-pvalue branch."""
+        from cellmetpro.visualization import plot_waterfall
+
+        df_no_pval = differential_results.drop(columns=["pvalue"])
+        ax = plot_waterfall(df_no_pval, pvalue_col="pvalue")
+        assert ax is not None
+        plt.close()
+
+    def test_waterfall_nonsignificant_results(self, differential_results):
+        """All p-values > threshold makes every bar ns_color (covers 623->626)."""
+        from cellmetpro.visualization import plot_waterfall
+
+        df = differential_results.copy()
+        df["pvalue"] = 0.99  # all above default threshold
+        ax = plot_waterfall(df, pvalue_col="pvalue", pvalue_threshold=0.05)
+        assert ax is not None
+        plt.close()
+
+    def test_waterfall_explicit_figsize(self, differential_results):
+        """Explicit figsize skips the auto-size branch in waterfall."""
+        from cellmetpro.visualization import plot_waterfall
+
+        ax = plot_waterfall(differential_results, figsize=(12, 8))
+        assert ax is not None
+        plt.close()
+
+    def test_subsystem_waterfall_missing_fold_col_raises(self):
+        """Missing fold_col raises ValueError in subsystem_waterfall."""
+        from cellmetpro.visualization.advanced import plot_subsystem_waterfall
+
+        df = pd.DataFrame({"pathway": ["P1"], "padj": [0.01]})
+        with pytest.raises(ValueError, match="fold_enrichment"):
+            plot_subsystem_waterfall(df)
+        plt.close("all")
+
+    def test_subsystem_waterfall_missing_term_col_raises(self):
+        """Missing term_col raises ValueError in subsystem_waterfall."""
+        from cellmetpro.visualization.advanced import plot_subsystem_waterfall
+
+        df = pd.DataFrame({"fold_enrichment": [2.5], "padj": [0.01]})
+        with pytest.raises(ValueError, match="pathway"):
+            plot_subsystem_waterfall(df)
+        plt.close("all")
+
+    def test_subsystem_waterfall_explicit_figsize(self):
+        """Explicit figsize skips auto-size in subsystem_waterfall."""
+        from cellmetpro.visualization.advanced import plot_subsystem_waterfall
+
+        df = pd.DataFrame(
+            {
+                "pathway": ["P1", "P2", "P3"],
+                "fold_enrichment": [2.0, 3.0, 1.5],
+                "padj": [0.01, 0.5, 0.02],
+            }
+        )
+        ax = plot_subsystem_waterfall(df, figsize=(10, 6))
+        assert ax is not None
+        plt.close()
+
+    def test_subsystem_waterfall_save(self, tmp_path):
+        """save arg writes subsystem waterfall to disk."""
+        from cellmetpro.visualization.advanced import plot_subsystem_waterfall
+
+        df = pd.DataFrame(
+            {
+                "pathway": ["P1", "P2", "P3"],
+                "fold_enrichment": [2.0, 3.0, 1.5],
+                "padj": [0.01, 0.5, 0.02],
+            }
+        )
+        save_path = tmp_path / "sw.png"
+        plot_subsystem_waterfall(df, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+    def test_waterfall_missing_required_column_raises(self, differential_results):
+        """Waterfall raises ValueError when log2fc_col is absent."""
+        from cellmetpro.visualization import plot_waterfall
+
+        df = differential_results.drop(columns=["log2fc"])
+        with pytest.raises(ValueError, match="log2fc"):
+            plot_waterfall(df, log2fc_col="log2fc")
+        plt.close("all")
+
+    def test_ridge_save(self, reaction_scores, groups, tmp_path):
+        """save arg writes ridge plot to disk."""
+        from cellmetpro.visualization import plot_ridge
+
+        save_path = tmp_path / "ridge.png"
+        plot_ridge(reaction_scores, groups, n_top=3, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+    def test_ridge_explicit_figsize_and_palette(self, reaction_scores, groups):
+        """Explicit figsize and palette cover the False branches in ridge."""
+        from cellmetpro.visualization import plot_ridge
+
+        fig = plot_ridge(
+            reaction_scores,
+            groups,
+            n_top=3,
+            figsize=(12, 6),
+            palette="husl",
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_single_violin_no_common_cells_raises(self, reaction_scores):
+        """No common cells raises ValueError in single reaction violin."""
+        from cellmetpro.visualization import plot_single_reaction_violin
+
+        disjoint = pd.Series(["A", "B"], index=["fake1", "fake2"])
+        with pytest.raises(ValueError, match="No common cells"):
+            plot_single_reaction_violin(reaction_scores, disjoint, "R0")
+        plt.close("all")
+
+    def test_single_violin_explicit_palette(self, reaction_scores, groups):
+        """Explicit palette covers the palette-is-not-None branch in single violin."""
+        from cellmetpro.visualization import plot_single_reaction_violin
+
+        ax = plot_single_reaction_violin(reaction_scores, groups, "R0", palette="Blues")
+        assert ax is not None
+        plt.close()
+
+
+# =============================================================================
+# EDGE CASE TESTS FOR DOTPLOT
+# =============================================================================
+
+
+class TestDotplotEdgeCases:
+    """Targeted tests to cover uncovered branches in dotplot.py."""
+
+    def test_reaction_dotplot_size_scale_std(self, reaction_scores, groups):
+        """size_scale='std' covers the std-scaling code path."""
+        from cellmetpro.visualization import plot_reaction_dotplot
+
+        ax = plot_reaction_dotplot(reaction_scores, groups, n_top=5, size_scale="std")
+        assert ax is not None
+        plt.close()
+
+    def test_reaction_dotplot_size_scale_n_cells(self, reaction_scores, groups):
+        """size_scale='n_cells' covers the n_cells-scaling code path."""
+        from cellmetpro.visualization import plot_reaction_dotplot
+
+        ax = plot_reaction_dotplot(
+            reaction_scores, groups, n_top=5, size_scale="n_cells"
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_reaction_dotplot_color_median(self, reaction_scores, groups):
+        """color_scale='median_score' covers the median-color code path."""
+        from cellmetpro.visualization import plot_reaction_dotplot
+
+        ax = plot_reaction_dotplot(
+            reaction_scores, groups, n_top=5, color_scale="median_score"
+        )
+        assert ax is not None
+        plt.close()
+
+    def test_reaction_dotplot_no_legend(self, reaction_scores, groups):
+        """show_legend=False skips the legend-building block."""
+        from cellmetpro.visualization import plot_reaction_dotplot
+
+        ax = plot_reaction_dotplot(reaction_scores, groups, n_top=5, show_legend=False)
+        assert ax is not None
+        plt.close()
+
+    def test_reaction_dotplot_save(self, reaction_scores, groups, tmp_path):
+        """save writes reaction dotplot to disk."""
+        from cellmetpro.visualization import plot_reaction_dotplot
+
+        save_path = tmp_path / "dotplot.png"
+        plot_reaction_dotplot(reaction_scores, groups, n_top=5, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+    def test_enrichment_dotplot_no_name_col(self, enrichment_results):
+        """Enrichment dotplot without name_col falls back to term_col labels."""
+        from cellmetpro.visualization import plot_enrichment_dotplot
+
+        df = enrichment_results.rename(columns={"go_name": "ignore_col"})
+        ax = plot_enrichment_dotplot(df, name_col="go_name")
+        assert ax is not None
+        plt.close()
+
+    def test_enrichment_dotplot_explicit_figsize(self, enrichment_results):
+        """Explicit figsize in enrichment dotplot skips auto-size branch."""
+        from cellmetpro.visualization import plot_enrichment_dotplot
+
+        ax = plot_enrichment_dotplot(enrichment_results, figsize=(10, 6))
+        assert ax is not None
+        plt.close()
+
+    def test_enrichment_dotplot_save(self, enrichment_results, tmp_path):
+        """save writes enrichment dotplot to disk."""
+        from cellmetpro.visualization import plot_enrichment_dotplot
+
+        save_path = tmp_path / "enrich_dotplot.png"
+        plot_enrichment_dotplot(enrichment_results, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+
+# =============================================================================
+# EDGE CASE TESTS FOR HEATMAP
+# =============================================================================
+
+
+class TestHeatmapEdgeCases:
+    """Targeted tests to cover uncovered branches in heatmap.py."""
+
+    def test_reaction_heatmap_scale_column(self, reaction_scores, groups):
+        """scale='column' covers the column-scaling code path."""
+        from cellmetpro.visualization import plot_reaction_heatmap
+
+        fig = plot_reaction_heatmap(reaction_scores, groups, n_top=5, scale="column")
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_reaction_heatmap_explicit_figsize(self, reaction_scores, groups):
+        """Explicit figsize skips the auto-size branch in reaction heatmap."""
+        from cellmetpro.visualization import plot_reaction_heatmap
+
+        fig = plot_reaction_heatmap(reaction_scores, groups, n_top=5, figsize=(10, 8))
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_reaction_heatmap_save(self, reaction_scores, groups, tmp_path):
+        """save writes reaction heatmap to disk."""
+        from cellmetpro.visualization import plot_reaction_heatmap
+
+        save_path = tmp_path / "heatmap.png"
+        plot_reaction_heatmap(reaction_scores, groups, n_top=5, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+    def test_grouped_heatmap_median_agg(self, reaction_scores, groups):
+        """agg_method='median' covers the median-aggregation path."""
+        from cellmetpro.visualization import plot_grouped_heatmap
+
+        ax = plot_grouped_heatmap(reaction_scores, groups, n_top=5, agg_method="median")
+        assert ax is not None
+        plt.close()
+
+    def test_grouped_heatmap_no_scale(self, reaction_scores, groups):
+        """scale=False skips the scaling block in grouped heatmap."""
+        from cellmetpro.visualization import plot_grouped_heatmap
+
+        ax = plot_grouped_heatmap(reaction_scores, groups, n_top=5, scale=False)
+        assert ax is not None
+        plt.close()
+
+    def test_grouped_heatmap_save(self, reaction_scores, groups, tmp_path):
+        """save writes grouped heatmap to disk."""
+        from cellmetpro.visualization import plot_grouped_heatmap
+
+        save_path = tmp_path / "grouped_heatmap.png"
+        plot_grouped_heatmap(reaction_scores, groups, n_top=5, save=str(save_path))
+        assert save_path.exists()
+        plt.close()
+
+    def test_reaction_heatmap_no_scale(self, reaction_scores, groups):
+        """scale=None covers the branch when neither row nor column scaling."""
+        from cellmetpro.visualization import plot_reaction_heatmap
+
+        fig = plot_reaction_heatmap(reaction_scores, groups, n_top=5, scale=None)
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_reaction_heatmap_hide_row_labels(self, reaction_scores, groups):
+        """show_row_labels=False covers the False branch of label-tick path."""
+        from cellmetpro.visualization import plot_reaction_heatmap
+
+        fig = plot_reaction_heatmap(
+            reaction_scores, groups, n_top=5, show_row_labels=False
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+    def test_reaction_heatmap_disjoint_groups(self, reaction_scores):
+        """Groups with no common cells leaves col_colors=None."""
+        from cellmetpro.visualization import plot_reaction_heatmap
+
+        disjoint = pd.Series(["A", "B"], index=["fake1", "fake2"])
+        fig = plot_reaction_heatmap(reaction_scores, disjoint, n_top=5)
+        assert isinstance(fig, plt.Figure)
+        plt.close()
+
+
+# =============================================================================
+# EDGE CASE TESTS FOR UMAP AND INTERACTIVE VISUALIZATIONS
+# =============================================================================
+
+
+class TestUmapEdgeCases:
+    """Targeted tests to cover umap.py and interactive.py uncovered branches."""
+
+    def test_plot_embedding_explicit_ax(self, embedding):
+        """Providing an explicit ax skips the fig,ax creation branch."""
+        from cellmetpro.visualization import plot_embedding
+
+        fig, ax = plt.subplots()
+        result_ax = plot_embedding(embedding, ax=ax)
+        assert result_ax is ax
+        plt.close()
+
+    def test_plot_embedding_series_color(self, embedding):
+        """pd.Series color covers the isinstance(color, pd.Series) branch."""
+        from cellmetpro.visualization import plot_embedding
+
+        color = pd.Series(np.linspace(0, 1, len(embedding)))
+        ax = plot_embedding(embedding, color=color)
+        assert ax is not None
+        plt.close()
+
+    def test_plot_embedding_no_colorbar(self, embedding):
+        """colorbar=False skips colorbar creation in continuous-color path."""
+        from cellmetpro.visualization import plot_embedding
+
+        color = np.random.rand(len(embedding))
+        ax = plot_embedding(embedding, color=color, colorbar=False)
+        assert ax is not None
+        plt.close()
+
+    def test_plot_categorical_no_legend(self, embedding):
+        """legend=False skips legend in categorical embed (186->exit branch)."""
+        from cellmetpro.visualization import plot_embedding
+
+        categories = pd.Series(["A"] * 50 + ["B"] * 50)
+        ax = plot_embedding(embedding, color=categories, legend=False)
+        assert ax is not None
+        plt.close()
+
+    def test_reaction_dotplot_explicit_figsize(self, reaction_scores, groups):
+        """Explicit figsize in reaction dotplot skips auto-size branch (153->159)."""
+        from cellmetpro.visualization import plot_reaction_dotplot
+
+        ax = plot_reaction_dotplot(reaction_scores, groups, n_top=5, figsize=(10, 8))
+        assert ax is not None
+        plt.close()
+
+    def test_interactive_volcano_save(self, differential_results, tmp_path):
+        """save path in plot_volcano_interactive covers line 142."""
+        try:
+            from cellmetpro.visualization import plot_volcano_interactive
+        except ImportError:
+            pytest.skip("plotly not installed")
+
+        save_path = str(tmp_path / "volcano.html")
+        fig = plot_volcano_interactive(differential_results, save=save_path)
+        assert fig is not None
+        import os
+
+        assert os.path.exists(save_path)
+
+    def test_interactive_embedding_save(self, embedding, tmp_path):
+        """save path in plot_embedding_interactive covers line 192."""
+        try:
+            from cellmetpro.visualization import plot_embedding_interactive
+        except ImportError:
+            pytest.skip("plotly not installed")
+
+        save_path = str(tmp_path / "embedding.html")
+        fig = plot_embedding_interactive(embedding, save=save_path)
+        assert fig is not None
+        import os
+
+        assert os.path.exists(save_path)
+
+    def test_interactive_heatmap_no_clustering(self, reaction_scores):
+        """Disabling clustering in interactive heatmap covers the False branches."""
+        try:
+            from cellmetpro.visualization.interactive import plot_heatmap_interactive
+        except ImportError:
+            pytest.skip("plotly not installed")
+
+        fig = plot_heatmap_interactive(
+            reaction_scores.iloc[:5, :10],
+            cluster_rows=False,
+            cluster_cols=False,
+        )
+        assert fig is not None
+
+    def test_interactive_heatmap_save(self, reaction_scores, tmp_path):
+        """save path in plot_heatmap_interactive covers its save line."""
+        try:
+            from cellmetpro.visualization.interactive import plot_heatmap_interactive
+        except ImportError:
+            pytest.skip("plotly not installed")
+
+        save_path = str(tmp_path / "heatmap.html")
+        plot_heatmap_interactive(reaction_scores.iloc[:5, :10], save=save_path)
+        import os
+
+        assert os.path.exists(save_path)
+
+    def test_interactive_embedding_with_labels(self, embedding):
+        """Providing labels exercises the 'labels is not None' branch (line 192)."""
+        try:
+            from cellmetpro.visualization import plot_embedding_interactive
+        except ImportError:
+            pytest.skip("plotly not installed")
+
+        labels = [f"pt_{i}" for i in range(len(embedding))]
+        fig = plot_embedding_interactive(embedding, labels=labels)
+        assert fig is not None
+
+    def test_interactive_heatmap_col_cluster_only(self, reaction_scores):
+        """cluster_rows=False, cluster_cols=True covers the row-skip branch."""
+        try:
+            from cellmetpro.visualization.interactive import plot_heatmap_interactive
+        except ImportError:
+            pytest.skip("plotly not installed")
+
+        fig = plot_heatmap_interactive(
+            reaction_scores.iloc[:5, :10],
+            cluster_rows=False,
+            cluster_cols=True,
+        )
+        assert fig is not None
+
+    def test_interactive_heatmap_row_cluster_only(self, reaction_scores):
+        """cluster_rows=True, cluster_cols=False covers the col-skip branch."""
+        try:
+            from cellmetpro.visualization.interactive import plot_heatmap_interactive
+        except ImportError:
+            pytest.skip("plotly not installed")
+
+        fig = plot_heatmap_interactive(
+            reaction_scores.iloc[:5, :10],
+            cluster_rows=True,
+            cluster_cols=False,
+        )
+        assert fig is not None

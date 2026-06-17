@@ -689,12 +689,10 @@ def run_analysis(args: argparse.Namespace) -> int:
         if result.secretion_scores is not None:
             result.secretion_scores.to_parquet(args.output / "secretion_scores.parquet")
     elif args.output_format == "h5ad":
-        import anndata as ad
+        from cellmetpro.io import store_compass_result
 
-        # Store results in AnnData format
-        result_adata = ad.AnnData(result.reaction_scores.T)
-        result_adata.layers["penalties"] = result.reaction_penalties.T.values
-        result_adata.write(args.output / "compass_results.h5ad")
+        store_compass_result(adata, result)
+        adata.write_h5ad(args.output / "compass_results.h5ad")
 
     # Save config
     import json

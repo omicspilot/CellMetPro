@@ -43,6 +43,7 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+coverage.json
 *.cover
 *.py,cover
 .hypothesis/
@@ -147,3 +148,5 @@ work/
 
 
 .claude
+*.html
+cellmetpro/models/*

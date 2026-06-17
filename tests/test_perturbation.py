@@ -212,6 +212,103 @@ class TestSensitivityAnalysis:
         assert "sensitivity" in results.columns
 
 
+class TestSimulateExpressionChangeEdgeCases:
+    """Edge cases for simulate_expression_change."""
+
+    def test_unknown_method_raises(self, simple_model):
+        """An unrecognised method name must raise ValueError."""
+        from cellmetpro.analysis.perturbation import simulate_expression_change
+
+        with pytest.raises(ValueError, match="Unknown method"):
+            simulate_expression_change(simple_model, "gene1", 1.0, method="bad_method")
+
+    def test_reversible_reaction_lower_bound_scaled(self):
+        """When a reaction has lb < 0 (reversible), lb is also scaled."""
+        import cobra
+
+        from cellmetpro.analysis.perturbation import simulate_expression_change
+
+        model = cobra.Model("rev")
+        A = cobra.Metabolite("A")
+        B = cobra.Metabolite("B")
+        ex = cobra.Reaction("EX_B")
+        ex.add_metabolites({B: -1})
+        ex.bounds = (0, 1000)
+
+        rxn = cobra.Reaction("REV")
+        rxn.add_metabolites({A: -1, B: 1})
+        rxn.bounds = (-10, 10)  # reversible
+        rxn.gene_reaction_rule = "rev_gene"
+
+        ex_A = cobra.Reaction("EX_A")
+        ex_A.add_metabolites({A: -1})
+        ex_A.bounds = (-100, 0)
+
+        model.add_reactions([rxn, ex, ex_A])
+        model.objective = "EX_B"
+
+        fluxes = simulate_expression_change(model, "rev_gene", 0.5, method="linear")
+        assert isinstance(fluxes, pd.Series)
+
+    def test_threshold_above_cutoff_keeps_reaction(self, simple_model):
+        """threshold method with fold_change >= 0.1 keeps reaction active."""
+        from cellmetpro.analysis.perturbation import simulate_expression_change
+
+        fluxes = simulate_expression_change(
+            simple_model, "gene1", 0.5, method="threshold"
+        )
+        assert isinstance(fluxes, pd.Series)
+
+
+class TestMultiKnockoutEdgeCases:
+    """Edge cases for multi_knockout."""
+
+    def test_unknown_method_raises(self, simple_model):
+        """An unrecognised method name must raise ValueError."""
+        from cellmetpro.analysis.perturbation import multi_knockout
+
+        with pytest.raises(ValueError, match="Unknown method"):
+            multi_knockout(simple_model, ["gene1"], method="invalid_method")
+
+    def test_simultaneous_with_invalid_gene_skips(self, simple_model):
+        """Invalid gene in simultaneous mode is silently skipped."""
+        from cellmetpro.analysis.perturbation import multi_knockout
+
+        # Should not raise — bad gene is logged and skipped
+        fluxes = multi_knockout(
+            simple_model, ["gene1", "no_such_gene"], method="simultaneous"
+        )
+        assert isinstance(fluxes, pd.Series)
+
+
+class TestCompareFluxDistributionsEdgeCases:
+    """Edge cases for compare_flux_distributions."""
+
+    def test_relative_method_produces_fold_change_columns(self):
+        """method='relative' must produce fold_change and log2_fc columns."""
+        from cellmetpro.analysis.perturbation import compare_flux_distributions
+
+        flux1 = pd.Series({"R1": 10.0, "R2": 5.0, "R3": 0.0})
+        flux2 = pd.Series({"R1": 20.0, "R2": 2.5, "R3": 0.0})
+
+        result = compare_flux_distributions(flux1, flux2, method="relative")
+
+        assert "fold_change" in result.columns
+        assert "log2_fc" in result.columns
+
+    def test_both_method_produces_all_columns(self):
+        """method='both' produces both absolute and relative columns."""
+        from cellmetpro.analysis.perturbation import compare_flux_distributions
+
+        flux1 = pd.Series({"R1": 10.0, "R2": 5.0})
+        flux2 = pd.Series({"R1": 15.0, "R2": 3.0})
+
+        result = compare_flux_distributions(flux1, flux2, method="both")
+
+        assert "abs_diff" in result.columns
+        assert "fold_change" in result.columns
+
+
 class TestPredictSyntheticLethality:
     """Tests for predict_synthetic_lethality function."""
 

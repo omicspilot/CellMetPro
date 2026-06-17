@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cellmetpro"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cellular Metabolic Profiler - Analyze and visualize metabolic profiles from scRNA-seq data"
 readme = "README.md"
 license = "MIT"
@@ -74,7 +74,7 @@ include = ["cellmetpro*"]
 
 [tool.black]
 line-length = 88
-target-version = ["py310", "py311", "py312"]
+target-version = ["py310", "py311"]
 
 [tool.ruff]
 line-length = 88

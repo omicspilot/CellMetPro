@@ -1,27 +1,36 @@
-# CellMetPro
+<div align="center">
+  <h1>CellMetPro</h1>
+  <h2>Cellular Metabolic Profiler</h2>
+  <p>
+    <b>Analyze metabolic activity at single-cell resolution using the COMPASS algorithm. Score reactions, identify metabolic heterogeneity, and discover metabolic programs in your scRNA-seq data.</b>
+  </p>
+  <p>
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+    <a href="https://pypi.org/project/cellmetpro/"><img src="https://img.shields.io/pypi/v/cellmetpro.svg" alt="PyPI version"></a>
+    <a href="https://codecov.io/gh/omicspilot/CellMetPro"><img src="https://codecov.io/gh/omicspilot/CellMetPro/graph/badge.svg" alt="Codecov"></a>
+    <br/>
+    <a href="https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml"><img src="https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml/badge.svg" alt="CI workflow"></a>
+    <a href="https://github.com/omicspilot/CellMetPro/commits/main"><img src="https://img.shields.io/github/last-commit/omicspilot/CellMetPro/main" alt="GitHub last commit"></a>
+  </p>
+</div>
 
-[![CI](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml/badge.svg)](https://github.com/omicspilot/CellMetPro/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/omicspilot/CellMetPro/branch/main/graph/badge.svg)](https://codecov.io/gh/omicspilot/CellMetPro)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+---
 
-**Cellular Metabolic Profiler for scRNA-seq data**
-
-Analyze metabolic activity at single-cell resolution using the COMPASS algorithm. Score reactions, identify metabolic heterogeneity, and discover metabolic programs in your scRNA-seq data.
-
-> **Documentation**: For detailed tutorials and API reference, visit [omicspilot.com/projects/cellmetpro](https://omicspilot.com/projects/cellmetpro)
+> **Documentation**: For detailed tutorials and API reference, visit [omicspilot.com/tools/cellmetpro](https://omicspilot.com/tools/cellmetpro)
 
 ---
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **COMPASS Algorithm** | Score metabolic reactions from gene expression using genome-scale models |
+| Feature                   | Description                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| **COMPASS Algorithm**     | Score metabolic reactions from gene expression using genome-scale models                 |
 | **Differential Analysis** | Compare metabolic activity between cell groups (Wilcoxon, t-test, ANOVA, Kruskal-Wallis) |
-| **Pathway Enrichment** | GO term and subsystem enrichment analysis |
-| **Metabolic Clustering** | PCA, UMAP, t-SNE embeddings with k-means, Leiden, Louvain clustering |
-| **Visualization** | Volcano plots, heatmaps, dotplots, embedding plots |
-| **CLI & Python API** | Full command-line interface and programmatic access |
+| **Pathway Enrichment**    | GO term and subsystem enrichment analysis                                                |
+| **Metabolic Clustering**  | PCA, UMAP, t-SNE embeddings with k-means, Leiden, Louvain clustering                     |
+| **Trajectory Analysis**   | Pseudotime ordering, dynamic reaction detection, metabolic velocity                      |
+| **Visualization**         | Volcano plots, heatmaps, dotplots, embedding plots                                       |
+| **CLI & Python API**      | Full command-line interface and programmatic access                                      |
 
 ---
 
@@ -32,6 +41,7 @@ pip install cellmetpro
 ```
 
 For development:
+
 ```bash
 git clone https://github.com/omicspilot/CellMetPro.git
 cd CellMetPro
@@ -69,6 +79,7 @@ print(f"Model reactions: {len(model.reactions)}")
 ```
 
 The sample data includes:
+
 - **Expression matrix**: 50 metabolic genes x 100 cells with 4 cell types (Proliferating, Quiescent, Hypoxic, Oxidative)
 - **Group annotations**: Cell type and treatment labels
 - **Reaction scores**: Pre-computed scores for differential analysis and visualization
@@ -125,13 +136,13 @@ plot_volcano(diff_results, save="volcano.png")
 
 ## Supported Data Formats
 
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| AnnData | `.h5ad` | Scanpy/AnnData objects |
-| Seurat | `.rds` | Seurat objects (requires R or rpy2) |
-| CSV | `.csv` | Comma-separated values |
-| TSV | `.tsv` | Tab-separated values |
-| MTX | `.mtx` | 10x Genomics sparse matrix |
+| Format  | Extension | Description                         |
+| ------- | --------- | ----------------------------------- |
+| AnnData | `.h5ad`   | Scanpy/AnnData objects              |
+| Seurat  | `.rds`    | Seurat objects (requires R or rpy2) |
+| CSV     | `.csv`    | Comma-separated values              |
+| TSV     | `.tsv`    | Tab-separated values                |
+| MTX     | `.mtx`    | 10x Genomics sparse matrix          |
 
 ### Loading Seurat Objects
 
@@ -173,13 +184,11 @@ Then load directly: `adata = ad.read_h5ad("output.h5ad")`
 
 ## Supported Models
 
-| Model | Organism | Reactions | Genes |
-|-------|----------|-----------|-------|
-| `human` | Homo sapiens | ~13,000 | ~3,000 |
-| `mouse` | Mus musculus | ~13,000 | ~3,000 |
-| `recon2` | Homo sapiens | ~7,800 | ~1,900 |
-| `recon3d` | Homo sapiens | ~13,500 | ~2,200 |
-| Custom | Any | User-defined | User-defined |
+| Model   | Organism     | Reactions    | Genes        |
+| ------- | ------------ | ------------ | ------------ |
+| `human` | Homo sapiens | ~13,000      | ~3,000       |
+| `mouse` | Mus musculus | ~13,000      | ~3,000       |
+| Custom  | Any          | User-defined | User-defined |
 
 Models are downloaded automatically on first use and cached locally. You will be prompted to confirm before any download starts. To skip the prompt:
 
@@ -191,25 +200,25 @@ cellmetpro run expression.h5ad -m human -o results/ --yes
 
 ## CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `cellmetpro run` | Run COMPASS metabolic analysis |
-| `cellmetpro differential` | Compare groups statistically |
-| `cellmetpro cluster` | Cluster cells by metabolic profile |
-| `cellmetpro pathway` | Pathway enrichment analysis |
-| `cellmetpro batch-correct` | Batch effect correction |
-| `cellmetpro trajectory` | Trajectory and pseudotime analysis |
-| `cellmetpro report` | Generate HTML analysis report |
-| `cellmetpro info` | Show model information |
-| `cellmetpro dashboard` | Launch interactive dashboard |
+| Command                    | Description                        |
+| -------------------------- | ---------------------------------- |
+| `cellmetpro run`           | Run COMPASS metabolic analysis     |
+| `cellmetpro differential`  | Compare groups statistically       |
+| `cellmetpro cluster`       | Cluster cells by metabolic profile |
+| `cellmetpro pathway`       | Pathway enrichment analysis        |
+| `cellmetpro batch-correct` | Batch effect correction            |
+| `cellmetpro trajectory`    | Trajectory and pseudotime analysis |
+| `cellmetpro report`        | Generate HTML analysis report      |
+| `cellmetpro info`          | Show model information             |
+| `cellmetpro dashboard`     | Launch interactive dashboard       |
 
 **Global flags** available on all commands:
 
-| Flag | Description |
-|------|-------------|
-| `-v`, `--version` | Show version and exit |
-| `--verbose` | Enable verbose/debug output |
-| `-y`, `--yes` | Auto-confirm all prompts (e.g. model downloads) |
+| Flag              | Description                                     |
+| ----------------- | ----------------------------------------------- |
+| `-v`, `--version` | Show version and exit                           |
+| `--verbose`       | Enable verbose/debug output                     |
+| `-y`, `--yes`     | Auto-confirm all prompts (e.g. model downloads) |
 
 Run `cellmetpro --help` or `cellmetpro <command> --help` for details.
 
@@ -324,6 +333,7 @@ echo 'eval "$(register-python-argcomplete cellmetpro)"' \
 **COMPASS** (Characterizing Cell states through metabolic Profiling of the Transcriptome) integrates scRNA-seq data with Genome-Scale Metabolic Models (GEMs) to infer metabolic activity at single-cell resolution.
 
 The algorithm:
+
 1. Maps gene expression to reaction penalties
 2. Optimizes flux through each reaction subject to stoichiometric constraints
 3. Scores reactions based on consistency with expression data
@@ -332,21 +342,20 @@ The algorithm:
 
 ## Citation
 
-If you use CellMetPro in your research, please cite:
+CellMetPro implements the COMPASS algorithm. If you use CellMetPro in your
+research, please cite the original COMPASS paper:
 
+```bibtex
+@article{wagner2021compass,
+  title   = {Metabolic modeling of single Th17 cells reveals regulators of autoimmunity},
+  author  = {Wagner, Allon and Regev, Aviv and Yosef, Nir},
+  journal = {Cell},
+  volume  = {184},
+  number  = {16},
+  pages   = {4168--4185},
+  year    = {2021},
+  doi     = {10.1016/j.cell.2021.06.021}
+}
 ```
-Wagner et al. (2021). Metabolic modeling of single Th17 cells reveals
-regulators of autoimmunity. Cell, 184(16), 4168-4185.
-```
 
----
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-## Links
-
-- **Issues**: [github.com/omicspilot/CellMetPro/issues](https://github.com/omicspilot/CellMetPro/issues)
+Original COMPASS implementation: https://github.com/wagnerlab-berkeley/Compass

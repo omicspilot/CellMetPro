@@ -163,10 +163,10 @@ def _plot_categorical(
 
         colors = sns.color_palette(palette, len(np.unique(categories)))
     except ImportError:
-        import matplotlib.cm as cm
+        import matplotlib
 
         n_categories = len(np.unique(categories))
-        colors = cm.get_cmap("tab10")(np.linspace(0, 1, n_categories))
+        colors = matplotlib.colormaps["tab10"](np.linspace(0, 1, n_categories))
 
     unique_categories = np.unique(categories)
     color_map = dict(zip(unique_categories, colors))
@@ -194,7 +194,7 @@ def _plot_categorical(
                 fontsize=8,
             )
         else:
-            ax.legend(loc=legend_loc, frameon=False)
+            ax.legend(loc=legend_loc, frameon=False)  # type: ignore[call-overload]
 
 
 def plot_metabolic_umap(

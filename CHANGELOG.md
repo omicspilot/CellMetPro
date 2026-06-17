@@ -6,6 +6,36 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.0] – 2026-06-17
+
+### Added
+
+- **Pseudo-bulk differential analysis** (`PseudoBulkAnalysis` class in
+  `cellmetpro.analysis.differential`) — correct multi-sample statistics that
+  avoid pseudoreplication by aggregating cell scores per biological replicate
+  before testing. Supports mean and sum aggregation; pairwise comparison with
+  t-test, Wilcoxon, and Mann-Whitney U; multi-group comparison with ANOVA and
+  Kruskal-Wallis; enforces ≥2 replicates per group.
+- **AnnData round-trip** (`cellmetpro.io`) — four store functions write all
+  CellMetPro results back into the original `.h5ad` object following scanpy
+  conventions: `store_compass_result`, `store_differential_result`,
+  `store_pathway_result`, and `store_pseudotime`. Handles partial cell overlap
+  with NaN fill, float32 storage for memory efficiency, and chainable returns.
+- **CLI h5ad output** now uses `store_compass_result` to embed results into the
+  input AnnData rather than creating a standalone object.
+
+### Improved
+
+- **Test coverage raised from 71% to 80%** — 664 tests across all modules,
+  including new suites for `io.py` (28 tests), pseudo-bulk analysis (25 tests),
+  perturbation edge cases, reporting internals, and visualization coverage paths.
+- **Black `target-version` pinned to `["py310", "py311"]`** to ensure
+  formatting is stable across all CI Python versions (3.10, 3.11, 3.12).
+- **Mypy** — fixed two `Any | None` narrowing errors in `PseudoBulkAnalysis`
+  via explicit `assert sample_groups is not None` guards.
+
+---
+
 ## [0.1.0] – 2026-03-18
 
 First public release of CellMetPro — a Python package for analyzing and

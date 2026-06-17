@@ -1633,3 +1633,512 @@ class TestCacheEdgeCases:
         cache = CompassCache(cache_dir=tmp_path, model_id="test")
         # Should not raise
         cache.clear("nonexistent_sample")
+
+    def test_load_max_fluxes_cache_miss(self, tmp_path):
+        """load_max_fluxes returns None when nothing has been saved."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="fresh")
+        result = cache.load_max_fluxes()
+        assert result is None
+
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
+    def test_save_load_penalties(self, tmp_path):
+        """Penalties can be saved and reloaded from disk."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        penalties = pd.DataFrame(
+            {"cell1": [0.1, 0.9], "cell2": [0.5, 0.3]}, index=["R1", "R2"]
+        )
+        cache.save_penalties(penalties, "sample_pen")
+        loaded = cache.load_penalties("sample_pen")
+
+        assert loaded is not None
+        assert loaded.shape == (2, 2)
+
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
+    def test_load_penalties_cache_miss(self, tmp_path):
+        """load_penalties returns None when nothing has been saved."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        result = cache.load_penalties("nonexistent")
+        assert result is None
+
+    def test_save_load_json(self, tmp_path):
+        """Arbitrary JSON data can be saved and reloaded."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        data = {"beta": 0.95, "solver": "glpk", "n_reactions": 100}
+        cache.save_json(data, "config")
+
+        loaded = cache.load_json("config")
+        assert loaded is not None
+        assert loaded["beta"] == 0.95
+        assert loaded["solver"] == "glpk"
+
+    def test_load_json_cache_miss(self, tmp_path):
+        """load_json returns None when the key has not been saved."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        result = cache.load_json("nonexistent_key")
+        assert result is None
+
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
+    def test_get_cached_samples(self, tmp_path):
+        """get_cached_samples returns IDs of all samples with saved scores."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        assert cache.get_cached_samples() == []
+
+        scores = pd.DataFrame({"cell1": [1.0]}, index=["R1"])
+        cache.save_reaction_scores(scores, "sample_A")
+        cache.save_reaction_scores(scores, "sample_B")
+
+        cached = cache.get_cached_samples()
+        assert set(cached) == {"sample_A", "sample_B"}
+
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
+    def test_clear_all_cache(self, tmp_path):
+        """clear() with no argument wipes all cached data for the model."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        scores = pd.DataFrame({"cell1": [1.0]}, index=["R1"])
+        cache.save_reaction_scores(scores, "sample_X")
+
+        assert cache.has_sample("sample_X")
+        cache.clear()
+        assert not cache.has_sample("sample_X")
+
+    def test_get_cache_size(self, tmp_path):
+        """get_cache_size returns a non-negative integer (bytes)."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="test")
+        cache.save_max_fluxes({"R1": 100.0})
+
+        size = cache.get_cache_size()
+        assert isinstance(size, int)
+        assert size > 0
+
+    def test_get_cache_info(self, tmp_path):
+        """get_cache_info returns a dict with the expected keys."""
+        from cellmetpro.core.cache import CompassCache
+
+        cache = CompassCache(cache_dir=tmp_path, model_id="mymodel")
+        cache.save_max_fluxes({"R1": 1.0})
+
+        info = cache.get_cache_info()
+        assert info["model_id"] == "mymodel"
+        assert "n_cached_samples" in info
+        assert "total_size_bytes" in info
+        assert "has_max_fluxes" in info
+        assert info["has_max_fluxes"] is True
+
+    def test_memory_cache_update_existing_key(self):
+        """set() with an existing key updates the value without growing the cache."""
+        from cellmetpro.core.cache import MemoryCache
+
+        cache = MemoryCache(max_size=5)
+        cache.set("key1", "first")
+        cache.set("key2", "second")
+        assert len(cache) == 2
+
+        # Update key1 — should not grow the cache
+        cache.set("key1", "updated")
+        assert len(cache) == 2
+        assert cache.get("key1") == "updated"
+
+    def test_memory_cache_clear(self):
+        """clear() empties the cache completely."""
+        from cellmetpro.core.cache import MemoryCache
+
+        cache = MemoryCache(max_size=5)
+        cache.set("a", 1)
+        cache.set("b", 2)
+        assert len(cache) == 2
+
+        cache.clear()
+        assert len(cache) == 0
+        assert cache.get("a") is None
+
+
+# ============================================================================
+# Additional Preprocessing Tests
+# ============================================================================
+
+
+class TestPreprocessingCoverage:
+    """Additional coverage for preprocessing edge cases."""
+
+    def _make_adata(self, n_cells: int = 10, n_genes: int = 5):
+        """Create a simple dense AnnData for testing."""
+        import anndata as ad
+
+        rng = np.random.default_rng(42)
+        X = rng.integers(0, 10, (n_cells, n_genes)).astype(float)
+        return ad.AnnData(X)
+
+    def test_filter_cells_max_genes(self):
+        """filter_cells with max_genes removes cells expressing too many genes."""
+        from cellmetpro.core.preprocessing import filter_cells
+
+        adata = self._make_adata(n_cells=10, n_genes=5)
+        # Give one cell expression in all 5 genes
+        adata.X[0] = 1.0
+
+        # Allow at most 3 expressed genes; cell_0 (5 genes) should be removed
+        filtered = filter_cells(adata, min_genes=0, max_genes=4)
+        assert filtered.n_obs < adata.n_obs
+
+    def test_filter_cells_min_counts(self):
+        """filter_cells with min_counts removes low-count cells."""
+        from cellmetpro.core.preprocessing import filter_cells
+
+        adata = self._make_adata(n_cells=6, n_genes=4)
+        adata.X[:] = 0.0
+        adata.X[0] = 100.0  # Only cell_0 has counts
+
+        filtered = filter_cells(adata, min_genes=0, min_counts=50)
+        assert filtered.n_obs == 1
+
+    def test_filter_cells_max_counts(self):
+        """filter_cells with max_counts removes high-count cells."""
+        from cellmetpro.core.preprocessing import filter_cells
+
+        adata = self._make_adata(n_cells=6, n_genes=4)
+        adata.X[:] = 1.0
+        adata.X[0] = 1000.0  # cell_0 has very high counts
+
+        filtered = filter_cells(adata, min_genes=0, max_counts=100)
+        assert filtered.n_obs == adata.n_obs - 1
+
+    def test_filter_genes_min_counts(self):
+        """filter_genes with min_counts removes lowly expressed genes."""
+        from cellmetpro.core.preprocessing import filter_genes
+
+        adata = self._make_adata(n_cells=5, n_genes=4)
+        adata.X[:] = 0.0
+        adata.X[:, 0] = 10.0  # Only gene_0 has counts
+
+        filtered = filter_genes(adata, min_cells=0, min_counts=5)
+        assert filtered.n_vars == 1
+
+    def test_normalize_expression_sparse_input(self):
+        """normalize_expression handles sparse AnnData correctly."""
+        import anndata as ad
+        from scipy.sparse import csr_matrix
+
+        from cellmetpro.core.preprocessing import normalize_expression
+
+        X = csr_matrix(np.array([[10.0, 0.0, 5.0], [0.0, 20.0, 0.0]]))
+        adata = ad.AnnData(X)
+
+        normalized = normalize_expression(adata, target_sum=1e4, log_transform=False)
+        assert not np.any(np.isnan(normalized.X))
+
+    def test_load_mtx_without_gene_barcode_files(self, tmp_path):
+        """load_mtx generates generic gene/cell names when support files are absent."""
+        from scipy.io import mmwrite
+        from scipy.sparse import csr_matrix
+
+        from cellmetpro.core.preprocessing import DataLoader
+
+        # Write a 3-genes x 4-cells matrix (DataLoader will transpose to 4 x 3)
+        matrix = csr_matrix(
+            np.array([[1, 2, 0, 1], [0, 0, 3, 1], [2, 1, 0, 0]], dtype=float)
+        )
+        mtx_path = tmp_path / "matrix.mtx"
+        mmwrite(str(mtx_path), matrix)
+
+        loader = DataLoader(mtx_path)
+        adata = loader.load()
+
+        assert adata.n_obs == 4  # cells
+        assert adata.n_vars == 3  # genes
+        assert adata.obs_names[0].startswith("cell_")
+        assert adata.var_names[0].startswith("gene_")
+
+    def test_load_mtx_with_gene_and_barcode_files(self, tmp_path):
+        """load_mtx reads gene and barcode names from TSV files."""
+        import pandas as pd
+        from scipy.io import mmwrite
+        from scipy.sparse import csr_matrix
+
+        from cellmetpro.core.preprocessing import DataLoader
+
+        matrix = csr_matrix(
+            np.array([[1, 2, 3], [4, 5, 6]], dtype=float)
+        )  # 2 genes x 3 cells
+        mmwrite(str(tmp_path / "matrix.mtx"), matrix)
+
+        # genes.tsv: 2-column format (ID, name)
+        pd.DataFrame([["ENSG001", "GAPDH"], ["ENSG002", "PKM"]]).to_csv(
+            tmp_path / "genes.tsv", sep="\t", header=False, index=False
+        )
+        # barcodes.tsv
+        pd.DataFrame(["ACGT-1", "TGCA-1", "GCTA-1"]).to_csv(
+            tmp_path / "barcodes.tsv", sep="\t", header=False, index=False
+        )
+
+        loader = DataLoader(tmp_path / "matrix.mtx")
+        adata = loader.load()
+
+        assert adata.n_obs == 3
+        assert adata.n_vars == 2
+        assert "GAPDH" in adata.var_names
+        assert "ACGT-1" in adata.obs_names
+
+    def test_load_mtx_single_column_genes_file(self, tmp_path):
+        """load_mtx reads gene names when genes.tsv has only one column."""
+        import pandas as pd
+        from scipy.io import mmwrite
+        from scipy.sparse import csr_matrix
+
+        from cellmetpro.core.preprocessing import DataLoader
+
+        matrix = csr_matrix(
+            np.array([[1, 2], [3, 4]], dtype=float)
+        )  # 2 genes x 2 cells
+        mmwrite(str(tmp_path / "matrix.mtx"), matrix)
+
+        pd.DataFrame(["GENE_A", "GENE_B"]).to_csv(
+            tmp_path / "genes.tsv", sep="\t", header=False, index=False
+        )
+
+        loader = DataLoader(tmp_path / "matrix.mtx")
+        adata = loader.load()
+
+        assert "GENE_A" in adata.var_names
+
+    def test_normalize_expression_copy_false(self):
+        """normalize_expression with copy=False modifies adata in-place."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import normalize_expression
+
+        X = np.array([[10.0, 0.0, 5.0], [0.0, 20.0, 0.0]])
+        adata = ad.AnnData(X)
+        original_id = id(adata)
+
+        result = normalize_expression(adata, copy=False)
+        assert id(result) == original_id
+
+    def test_filter_cells_sparse_input(self):
+        """filter_cells handles sparse AnnData correctly."""
+        import anndata as ad
+        from scipy.sparse import csr_matrix
+
+        from cellmetpro.core.preprocessing import filter_cells
+
+        X = csr_matrix(
+            np.array(
+                [
+                    [1, 1, 0, 0],  # 2 genes expressed
+                    [1, 1, 1, 0],  # 3 genes expressed
+                    [0, 0, 0, 0],  # 0 genes expressed
+                ],
+                dtype=float,
+            )
+        )
+        adata = ad.AnnData(X)
+
+        filtered = filter_cells(adata, min_genes=1)
+        assert filtered.n_obs == 2
+
+    def test_filter_cells_copy_false(self):
+        """filter_cells with copy=False works without duplicating the object."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import filter_cells
+
+        X = np.ones((5, 3))
+        adata = ad.AnnData(X)
+
+        result = filter_cells(adata, min_genes=0, copy=False)
+        assert result.n_obs == 5
+
+    def test_filter_genes_sparse_input(self):
+        """filter_genes handles sparse AnnData correctly."""
+        import anndata as ad
+        from scipy.sparse import csr_matrix
+
+        from cellmetpro.core.preprocessing import filter_genes
+
+        X = csr_matrix(
+            np.array(
+                [
+                    [1, 0, 1],  # gene0 and gene2 expressed in cell0
+                    [1, 0, 0],  # only gene0 expressed in cell1
+                ],
+                dtype=float,
+            )
+        )
+        adata = ad.AnnData(X)
+
+        filtered = filter_genes(adata, min_cells=2)
+        assert filtered.n_vars == 1  # only gene0 expressed in both cells
+
+    def test_filter_genes_copy_false(self):
+        """filter_genes with copy=False works without duplicating the object."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import filter_genes
+
+        X = np.ones((4, 3))
+        adata = ad.AnnData(X)
+
+        result = filter_genes(adata, min_cells=0, copy=False)
+        assert result.n_vars == 3
+
+    def test_to_dataframe_with_layer(self):
+        """to_dataframe reads from a named layer when layer is specified."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import to_dataframe
+
+        X = np.zeros((3, 4))
+        adata = ad.AnnData(X)
+        layer_data = np.ones((3, 4)) * 5.0
+        adata.layers["normalized"] = layer_data
+
+        df = to_dataframe(adata, layer="normalized", genes_as_rows=False)
+        assert df.shape == (3, 4)
+        assert (df.values == 5.0).all()
+
+    def test_to_dataframe_genes_as_rows_false(self):
+        """to_dataframe with genes_as_rows=False returns cells x genes."""
+        import anndata as ad
+
+        from cellmetpro.core.preprocessing import to_dataframe
+
+        rng = np.random.default_rng(0)
+        X = rng.random((5, 10))
+        adata = ad.AnnData(X)
+
+        df = to_dataframe(adata, genes_as_rows=False)
+        assert df.shape == (5, 10)  # cells x genes
+
+    def test_to_dataframe_sparse_x_converted(self):
+        """to_dataframe converts sparse X to dense via toarray()."""
+        import anndata as ad
+        from scipy.sparse import csr_matrix
+
+        from cellmetpro.core.preprocessing import to_dataframe
+
+        X = csr_matrix(np.array([[1, 0, 3], [0, 5, 0]], dtype=float))
+        adata = ad.AnnData(X)
+
+        df = to_dataframe(adata, genes_as_rows=False)
+        assert df.shape == (2, 3)
+        assert df.iloc[0, 0] == 1.0
+        assert df.iloc[0, 1] == 0.0
+
+    def test_load_tsv_file(self, tmp_path):
+        """DataLoader handles .tsv files via load_csv(sep='\\t')."""
+        import anndata as ad
+        import pandas as pd
+
+        from cellmetpro.core.preprocessing import DataLoader
+
+        tsv_path = tmp_path / "expr.tsv"
+        df = pd.DataFrame(
+            np.array([[1, 2], [3, 4]], dtype=float),
+            index=["cell0", "cell1"],
+            columns=["geneA", "geneB"],
+        )
+        df.to_csv(tsv_path, sep="\t")
+
+        loader = DataLoader(str(tsv_path))
+        adata = loader.load()
+        assert isinstance(adata, ad.AnnData)
+
+
+class TestGetOrComputeMaxFluxes:
+    """Tests for get_or_compute_max_fluxes (requires cobra)."""
+
+    @pytest.fixture
+    def tiny_model(self):
+        """Minimal cobra model with two non-boundary reactions."""
+        import cobra
+
+        model = cobra.Model("tiny")
+        A = cobra.Metabolite("A_c", compartment="c")
+        B = cobra.Metabolite("B_c", compartment="c")
+
+        r1 = cobra.Reaction("R1")
+        r1.add_metabolites({A: -1, B: 1})
+        r1.bounds = (0, 10)
+
+        ex_A = cobra.Reaction("EX_A")
+        ex_A.add_metabolites({A: -1})
+        ex_A.bounds = (-10, 1000)
+
+        ex_B = cobra.Reaction("EX_B")
+        ex_B.add_metabolites({B: -1})
+        ex_B.bounds = (0, 1000)
+
+        model.add_reactions([r1, ex_A, ex_B])
+        model.objective = "EX_B"
+        return model
+
+    def test_compute_no_cache(self, tiny_model):
+        """Computes max fluxes when cache=None."""
+        try:
+            from cellmetpro.core.cache import get_or_compute_max_fluxes
+        except ImportError:
+            pytest.skip("cobra not installed")
+
+        result = get_or_compute_max_fluxes(tiny_model, cache=None)
+
+        assert isinstance(result, dict)
+        assert len(result) > 0
+
+    def test_compute_and_save_to_cache(self, tiny_model, tmp_path):
+        """Computes when cache has no max_fluxes, then saves to cache."""
+        try:
+            from cellmetpro.core.cache import CompassCache, get_or_compute_max_fluxes
+        except ImportError:
+            pytest.skip("cobra not installed")
+
+        cache = CompassCache(cache_dir=tmp_path)
+        result = get_or_compute_max_fluxes(tiny_model, cache=cache)
+
+        assert isinstance(result, dict)
+        cached = cache.load_max_fluxes()
+        assert cached is not None
+        assert set(cached.keys()) == set(result.keys())
+
+    def test_returns_cached_value(self, tiny_model, tmp_path):
+        """Returns pre-existing cached max fluxes without recomputing."""
+        try:
+            from cellmetpro.core.cache import CompassCache, get_or_compute_max_fluxes
+        except ImportError:
+            pytest.skip("cobra not installed")
+
+        cache = CompassCache(cache_dir=tmp_path)
+        precomputed = {"R1": 99.0, "EX_A": 42.0}
+        cache.save_max_fluxes(precomputed)
+
+        result = get_or_compute_max_fluxes(tiny_model, cache=cache)
+
+        assert result == precomputed
+
+    def test_from_model_creates_deterministic_id(self, tiny_model, tmp_path):
+        """CompassCache.from_model derives a stable ID from the model."""
+        try:
+            from cellmetpro.core.cache import CompassCache
+        except ImportError:
+            pytest.skip("cobra not installed")
+
+        cache1 = CompassCache.from_model(tiny_model, cache_dir=tmp_path)
+        cache2 = CompassCache.from_model(tiny_model, cache_dir=tmp_path)
+
+        assert isinstance(cache1, CompassCache)
+        assert "tiny" in cache1.model_id
+        assert cache1.model_id == cache2.model_id

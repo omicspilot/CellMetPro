@@ -583,27 +583,18 @@ class CompassScorer:
         pd.DataFrame
             Penalty scores (reactions x cells).
         """
-        # Work with numpy arrays for speed
         expr_values = expression.values.astype(np.float64)
-
         # Handle inf values by replacing with large finite value
         expr_values = np.nan_to_num(expr_values, nan=0.0, posinf=1e10, neginf=0.0)
 
-        # Add epsilon and log transform
         expr_safe = expr_values + PENALTY_EPSILON
         log_expr = np.log1p(expr_safe)
-
-        # Normalize per reaction (row-wise)
         max_vals = log_expr.max(axis=1, keepdims=True)
-        # Avoid division by zero
         max_vals = np.where(max_vals == 0, 1.0, max_vals)
-
         normalized = log_expr / max_vals
 
         # Invert: high expression = low penalty
         penalties = 1 - normalized
-
-        # Ensure valid range
         penalties = np.clip(penalties, 0.0, 1.0)
 
         return pd.DataFrame(

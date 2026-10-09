@@ -276,24 +276,3 @@ whole React/Vite/Zustand/TanStack/openapi-ts frontend, the Electron plan.
 
 The `cellmetpro-ui` repo is archived once the port is done.
 
----
-
-## The developer and how to collaborate
-
-**Oumar Ndiaye**, bioinformatics engineer and author of CellMetPro. Advanced Python (built
-CellMetPro end-to-end with CI/CD, 80% coverage, PyPI). Strong JavaScript (React, Vue). Not a fan
-of Java.
-
-Learning through this project: Shiny's reactive model, process and job management, SQLite
-concurrency, conda packaging and `constructor` installers, release pipelines, later Docker.
-
-Collaboration preferences:
-- **No code unless explicitly asked** ("give me the code", "write it", "implement it").
-- **Theory first.** For each step: an overview that weaves need and solution together, a list of
-  references (official docs, quality deep dives), then progressive pseudocode skeletons with
-  inline comments explaining the *why*: what breaks if a line is skipped, which alternative was
-  rejected and why. The developer writes the real code.
-- **Hint-based corrections**, not rewrites.
-- **Scope discipline:** change only what's explicitly requested. No proactive cleanup of adjacent
-  files.
-- Production quality, no "clean this up later".

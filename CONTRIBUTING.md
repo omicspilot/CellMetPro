@@ -131,7 +131,7 @@ Write clear, descriptive commit messages:
 
 ```bash
 git add .
-git commit -m "feat: add Louvain clustering support
+git commit -m "feat(analysis): add Louvain clustering support
 
 - Add louvain method to ClusteringAnalysis
 - Update CLI --method choices
@@ -141,11 +141,16 @@ git commit -m "feat: add Louvain clustering support
 Commit message prefixes:
 - `feat:` - New feature
 - `fix:` - Bug fix
-- `docs:` - Documentation changes
-- `test:` - Test additions/changes
+- `perf:` - Performance improvement with no behavior change
 - `refactor:` - Code refactoring
 - `style:` - Code style changes
-- `chore:` - Maintenance tasks
+- `revert:` - Reverts a previous commit
+- `chore:` - Everything that isn't library or app code: tests, docs, CI, tooling,
+  dependencies, packaging and releases
+
+Library and app changes take a scope naming the area they touch: `core`, `analysis`,
+`viz`, `io`, `report`, `cli`, `engine` or `ui` (e.g. `fix(core): ...`). `chore:` takes no
+scope.
 
 ### 5. Push and Create Pull Request
 
